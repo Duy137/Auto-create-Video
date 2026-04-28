@@ -1,0 +1,38 @@
+# Environment
+.env
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+venv/
+.venv/
+build/
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+
+# Node.js
+node_modules/
+remotion/node_modules/
+
+# Output (generated videos)
+output/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# AI logs — tracked structure, ignored content
+.ai-log/*.jsonl
+
+# Agents
+.agents/
+# Remotion staged assets (generated during render)
+remotion/public/assets/
+
+# Database (SQLite files — never commit)
+data/
+*.db
+*.db-journal
+*.db-wal
