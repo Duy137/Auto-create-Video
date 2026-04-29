@@ -116,3 +116,128 @@ Nếu khi chạy lệnh `git merge upstream/main` mà terminal báo lỗi `CONFL
    git commit -m "Giải quyết xung đột (Merge Conflict)"
    ```
 Mọi thứ đã trở lại bình thường!
+
+---
+
+## 6. Cherry-Pick: Lấy Đúng Commit Cần Thiết (Quan Trọng!)
+
+### Vấn đề: Tại sao `git merge` có thể thất bại?
+
+Nếu 2 repo **không có lịch sử chung** (không fork trực tiếp từ nhau qua Git), lệnh merge sẽ báo lỗi:
+
+```
+fatal: HEAD...upstream/UpgradeOutput: no merge base
+```
+
+Lý do: Git không tìm được "tổ tiên chung" (common ancestor) giữa 2 repo để so sánh. Điều này xảy ra khi repo cá nhân được tạo độc lập (copy thủ công) thay vì `git clone` hoặc `git fork` từ repo trường.
+
+### Giải pháp: Cherry-Pick
+
+**Cherry-pick** = chọn lọc đúng commit cụ thể cần lấy, thay vì merge toàn bộ lịch sử.
+
+Hình dung đơn giản:
+```
+Merge    = Trộn TOÀN BỘ lịch sử 2 bên lại → dễ conflict
+Cherry-pick = Nhặt ĐÚNG 1 commit bạn cần  → an toàn, chính xác
+```
+
+### Quy trình Cherry-Pick từ Upstream
+
+```powershell
+# 0. Mở terminal tại repo cá nhân
+cd "d:\Developer\Auto create Video"
+
+# 1. LUÔN commit trước (bảo vệ code đang làm)
+git add -A
+git commit -m "Mô tả công việc đang làm"
+
+# 2. Tạo backup branch (phòng hờ)
+git branch backup-before-merge
+
+# 3. Fetch branch cần lấy từ upstream
+git fetch upstream <tên-branch>
+# Ví dụ: git fetch upstream UpgradeOutput
+
+# 4. Xem danh sách commit gần nhất trên branch đó
+git log upstream/<tên-branch> --oneline -10
+
+# 5. Copy mã hash của commit cần lấy, rồi cherry-pick
+git cherry-pick <commit-hash> --no-commit
+
+# 6. Kiểm tra kỹ trước khi commit
+git status                    # Xem file nào thay đổi
+git diff --cached --stat      # Xem tổng quan thay đổi
+git diff --cached             # Xem chi tiết từng dòng (nếu cần)
+
+# 7. Commit
+git commit -m "feat: mô tả tính năng (cherry-pick from upstream)"
+```
+
+### Ví dụ thực tế: Lấy Vbee TTS từ Upstream
+
+```powershell
+# Đã commit code NewsIntro trước
+git add -A && git commit -m "feat: NewsIntro scene + CryptoVN branding"
+
+# Backup
+git branch backup-before-merge
+
+# Fetch branch UpgradeOutput từ repo trường
+git fetch upstream UpgradeOutput
+
+# Xem commit nào có Vbee
+git log upstream/UpgradeOutput --oneline -5
+# Kết quả: abc1234 feat: add Vbee AIVoice TTS engine (Vietnamese)
+
+# Cherry-pick commit đó
+git cherry-pick abc1234 --no-commit
+
+# Kiểm tra: chỉ có 5-6 file Vbee thay đổi, không đụng NewsIntro
+git diff --cached --stat
+
+# OK → commit
+git commit -m "feat: add Vbee TTS engine (cherry-pick from upstream)"
+```
+
+### Khi nào dùng Merge vs Cherry-Pick?
+
+| Tình huống | Dùng |
+|------------|------|
+| 2 repo có lịch sử chung (`git fork`) | **Merge** |
+| 2 repo độc lập (copy thủ công) | **Cherry-pick** |
+| Chỉ cần lấy 1-2 commit cụ thể | **Cherry-pick** |
+| Cần đồng bộ toàn bộ branch | **Merge** (nếu có merge base) |
+| Merge bị conflict quá phức tạp | **Cherry-pick** từng commit |
+
+### Nếu Cherry-Pick bị conflict
+
+```powershell
+# Xem file nào conflict
+git status
+
+# Mở VS Code để giải quyết (giống Section 5)
+# Sau khi sửa xong:
+git add .
+git commit -m "feat: cherry-pick upstream + resolve conflicts"
+```
+
+### Rollback nếu hỏng
+
+```powershell
+# Quay lại đúng trạng thái trước cherry-pick
+git reset --hard backup-before-merge
+```
+
+---
+
+## 7. Tóm Tắt Nhanh
+
+| Việc cần làm | Lệnh |
+|-------------|------|
+| Code hàng ngày → lưu | `git add . && git commit -m "..."` |
+| Backup lên GitHub | `git push` |
+| Lấy update từ trường | `git fetch upstream <branch>` |
+| Xem commit mới | `git log upstream/<branch> --oneline -5` |
+| Lấy commit cụ thể | `git cherry-pick <hash> --no-commit` |
+| Kiểm tra trước commit | `git diff --cached --stat` |
+| Rollback | `git reset --hard backup-before-merge` |
