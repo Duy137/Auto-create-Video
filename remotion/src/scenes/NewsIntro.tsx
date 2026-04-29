@@ -2,10 +2,16 @@
 /**
  * News Intro scene — branded news opening for CryptoVN 101.
  *
- * Layout (9:16, 1080×1920):
- *   - Top 55%: Media (image with Ken Burns zoom+pan, or video raw playback)
- *   - Bottom 45%: Dark branded overlay with accent line, logo, channel name, headline
- *   - Top-left badge: "Nguồn: Tổng hợp"
+ * Layout (9:16, 1080×1920) — optimized for TikTok safe zones:
+ *   - Top ~50%: Media (image with Ken Burns zoom+pan, or video raw playback)
+ *   - Bottom ~50%: Solid brand-color overlay with logo, channel name, headline
+ *   - Source badge: positioned below TikTok search bar (~170px from top)
+ *   - Content zone: 40%–70% of screen (above TikTok caption/avatar/buttons)
+ *
+ * TikTok safe zones:
+ *   - Top 0–120px: search bar → avoid placing content here
+ *   - Bottom 0–350px: caption, avatar, action buttons → avoid content here
+ *   - Safe content area: 120px–1570px (on 1920px canvas)
  *
  * Brand color: #C6FD01 (lime neon)
  * Logo: cryptovn101-logo.png (user-provided asset in remotion/public/)
@@ -29,6 +35,8 @@ import { useExitAnimation } from "../lib/useExitAnimation";
 // ── Constants ──
 
 const BRAND_COLOR = "#C6FD01";
+/** Dark green derived from brand color — for solid overlay background */
+const BRAND_OVERLAY_BG = "rgba(18, 32, 2, 0.93)";
 
 interface NewsIntroProps {
   scene: SceneData;
@@ -74,7 +82,7 @@ export const NewsIntro: React.FC<NewsIntroProps> = ({
     : 0;
 
   // ── Brand overlay slide-up ──
-  const overlayTranslateY = interpolate(frame, [5, 25], [60, 0], {
+  const overlayTranslateY = interpolate(frame, [5, 25], [80, 0], {
     extrapolateLeft: "clamp",
     extrapolateRight: "clamp",
   });
@@ -84,13 +92,13 @@ export const NewsIntro: React.FC<NewsIntroProps> = ({
   });
 
   // ── Source badge fade-in ──
-  const badgeOpacity = interpolate(frame, [8, 18], [0, 0.7], {
+  const badgeOpacity = interpolate(frame, [8, 18], [0, 0.85], {
     extrapolateLeft: "clamp",
     extrapolateRight: "clamp",
   });
 
   // ── Accent line width animation ──
-  const accentWidth = interpolate(frame, [15, 35], [0, 60], {
+  const accentWidth = interpolate(frame, [15, 35], [0, 80], {
     extrapolateLeft: "clamp",
     extrapolateRight: "clamp",
   });
@@ -98,13 +106,13 @@ export const NewsIntro: React.FC<NewsIntroProps> = ({
   // ── Adaptive headline font size ──
   const narrationLength = scene.narration.length;
   const headlineFontSize =
-    narrationLength > 200 ? 36 : narrationLength > 120 ? 40 : 46;
+    narrationLength > 200 ? 38 : narrationLength > 120 ? 44 : 52;
 
   const hasMedia = scene.mediaUrl != null;
 
   return (
     <AbsoluteFill style={{ opacity: fadeIn * exitOpacity }}>
-      {/* Layer 1: Media background (full bleed) */}
+      {/* Layer 1: Media background (top ~50%, full bleed) */}
       <AbsoluteFill style={{ overflow: "hidden" }}>
         {hasMedia ? (
           scene.mediaType === "video" ? (
@@ -146,11 +154,11 @@ export const NewsIntro: React.FC<NewsIntroProps> = ({
         )}
       </AbsoluteFill>
 
-      {/* Layer 2: Source badge (top-left) */}
+      {/* Layer 2: Source badge — below TikTok search bar */}
       <div
         style={{
           position: "absolute",
-          top: 50,
+          top: 170,
           left: 40,
           opacity: badgeOpacity,
           zIndex: 10,
@@ -159,89 +167,99 @@ export const NewsIntro: React.FC<NewsIntroProps> = ({
         <div
           style={{
             fontFamily,
-            fontSize: 18,
-            fontWeight: 500,
+            fontSize: 26,
+            fontWeight: 600,
             color: "#FFFFFF",
-            backgroundColor: "rgba(0,0,0,0.4)",
-            borderRadius: 6,
-            padding: "4px 12px",
+            backgroundColor: "rgba(0,0,0,0.5)",
+            borderRadius: 8,
+            padding: "6px 16px",
+            letterSpacing: 0.5,
           }}
         >
           Nguồn: Tổng hợp
         </div>
       </div>
 
-      {/* Layer 3: Brand overlay (bottom 45%) */}
+      {/* Layer 3: Solid brand-color overlay (bottom 55%) */}
       <div
         style={{
           position: "absolute",
           bottom: 0,
           left: 0,
           right: 0,
-          height: "45%",
-          background:
-            "linear-gradient(to bottom, transparent 0%, rgba(0,0,0,0.85) 35%, rgba(0,0,0,0.95) 100%)",
-          display: "flex",
-          flexDirection: "column",
-          justifyContent: "flex-end",
-          padding: "0 60px 80px 60px",
+          height: "55%",
+          background: `linear-gradient(to bottom, transparent 0%, ${BRAND_OVERLAY_BG} 18%, rgba(15, 28, 1, 0.97) 100%)`,
           opacity: overlayOpacity,
           transform: `translateY(${overlayTranslateY}px)`,
         }}
       >
-        {/* Accent line */}
+        {/* Content container — positioned in TikTok safe zone (NOT at bottom) */}
         <div
           style={{
-            height: 2,
-            width: accentWidth,
-            backgroundColor: BRAND_COLOR,
-            marginBottom: 20,
-          }}
-        />
-
-        {/* Logo + Channel name row */}
-        <div
-          style={{
+            position: "absolute",
+            top: "22%",
+            left: 50,
+            right: 50,
             display: "flex",
-            flexDirection: "row",
-            alignItems: "center",
-            gap: 12,
-            marginBottom: 16,
+            flexDirection: "column",
           }}
         >
-          <Img
-            src={staticFile("cryptovn101-logo.png")}
-            style={{ width: 50, height: 50 }}
-          />
-          <span
+          {/* Accent line */}
+          <div
             style={{
-              fontFamily,
-              fontSize: 22,
-              fontWeight: 700,
-              color: BRAND_COLOR,
-              letterSpacing: 1,
+              height: 3,
+              width: accentWidth,
+              backgroundColor: BRAND_COLOR,
+              marginBottom: 24,
+              borderRadius: 2,
+            }}
+          />
+
+          {/* Logo + Channel name row */}
+          <div
+            style={{
+              display: "flex",
+              flexDirection: "row",
+              alignItems: "center",
+              gap: 16,
+              marginBottom: 24,
             }}
           >
-            CryptoVN 101
-          </span>
-        </div>
+            <Img
+              src={staticFile("cryptovn101-logo.png")}
+              style={{ width: 60, height: 60 }}
+            />
+            <span
+              style={{
+                fontFamily,
+                fontSize: 28,
+                fontWeight: 700,
+                color: BRAND_COLOR,
+                letterSpacing: 1.5,
+              }}
+            >
+              CryptoVN 101
+            </span>
+          </div>
 
-        {/* Headline text (from narration) */}
-        <div
-          style={{
-            fontFamily,
-            fontSize: headlineFontSize,
-            fontWeight: 800,
-            color: "#FFFFFF",
-            lineHeight: 1.35,
-            textShadow: "0 2px 8px rgba(0,0,0,0.6)",
-            display: "-webkit-box",
-            WebkitLineClamp: 4,
-            WebkitBoxOrient: "vertical",
-            overflow: "hidden",
-          }}
-        >
-          {scene.narration}
+          {/* Headline text (from narration) */}
+          <div
+            style={{
+              fontFamily,
+              fontSize: headlineFontSize,
+              fontWeight: 800,
+              color: "#FFFFFF",
+              lineHeight: 1.3,
+              textShadow: "0 2px 12px rgba(0,0,0,0.4)",
+              display: "-webkit-box",
+              WebkitLineClamp: 4,
+              WebkitBoxOrient: "vertical",
+              overflow: "hidden",
+              textTransform: "uppercase",
+            }}
+          >
+            {scene.narration}
+          </div>
         </div>
       </div>
     </AbsoluteFill>
