@@ -718,6 +718,8 @@ async def run_pipeline(
             engine_kwargs["gemini_model"] = user_settings.get(
                 "gemini_model", "gemini-3.1-flash-tts-preview"
             )
+        elif tts_engine_name == "vbee":
+            pass  # No extra kwargs needed for Vbee
 
     # ── Step 2A & 2B: TTS + Media Search (PARALLEL) ──
     tts_result, scenes_with_media = await asyncio.gather(

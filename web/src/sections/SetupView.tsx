@@ -91,6 +91,12 @@ const VOICE_OPTIONS: Record<string, {id: string, label: string}[]> = {
     {id: 'Leda', label: '🎤 Leda (Nữ)'},
     {id: 'Vindemiatrix', label: '🎤 Vindemiatrix (Nữ)'},
   ],
+  vbee: [
+    {id: 'n_hanoi_male_nhabaohoangnam_news_vc', label: '🎙️ Phóng viên Nam (Tin tức)'},
+    {id: 'n_hanoi_male_tuananhnews_news_vc', label: '🎙️ Tuấn Anh News (Tin tức)'},
+    {id: 'n_hanoi_male_baotrungmc_news_vc', label: '🎙️ Bảo Trung MC'},
+    {id: 'n_hanoi_male_sizonguyen_education_vc', label: '🎙️ MR CU (Giáo dục)'},
+  ],
 }
 
 interface SetupViewProps {
@@ -413,6 +419,7 @@ export default function SetupView({ onJobCreated, initialSettings }: SetupViewPr
                         <SelectItem value="gemini">Gemini Flash TTS</SelectItem>
                         <SelectItem value="elevenlabs">ElevenLabs (Premium)</SelectItem>
                         <SelectItem value="edge-tts">Edge-TTS (Miễn phí)</SelectItem>
+                        <SelectItem value="vbee">Vbee AIVoice (Giọng Việt tốt nhất)</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>

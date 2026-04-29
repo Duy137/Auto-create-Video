@@ -17,6 +17,8 @@ OPENAI_API_KEY: str = os.getenv("OPENAI_API_KEY", "")
 PEXELS_API_KEY: str = os.getenv("PEXELS_API_KEY", "")
 GOOGLE_API_KEY: str = os.getenv("GOOGLE_API_KEY", "")  # Gemini LLM + TTS
 ELEVENLABS_API_KEY: str = os.getenv("ELEVENLABS_API_KEY", "")  # Premium TTS
+VBEE_APP_ID: str = os.getenv("VBEE_APP_ID", "")  # Vbee Vietnamese TTS
+VBEE_API_TOKEN: str = os.getenv("VBEE_API_TOKEN", "")  # Vbee API JWT token
 
 # ── Auth ──
 JWT_SECRET_KEY: str = os.getenv("JWT_SECRET_KEY", "dev-secret-change-me")
@@ -52,7 +54,8 @@ if JOB_STORE_BACKEND not in {"auto", "redis", "file"}:
     JOB_STORE_BACKEND = "auto"
 
 # ── TTS ──
-DEFAULT_TTS_ENGINE: str = os.getenv("DEFAULT_TTS_ENGINE", "openai")  # "openai" | "edge-tts"
+DEFAULT_TTS_ENGINE: str = os.getenv("DEFAULT_TTS_ENGINE", "openai")
+# Options: "openai" | "edge-tts" | "elevenlabs" | "gemini" | "vbee"
 DEFAULT_VOICE: str = os.getenv("DEFAULT_VOICE", "nova")
 
 # ── VLM Media Reranker ──

@@ -26,7 +26,7 @@ from loguru import logger
 from openai import AsyncOpenAI
 
 from app.state import WordTimestamp
-from config import ELEVENLABS_API_KEY, GOOGLE_API_KEY, OPENAI_API_KEY
+from config import ELEVENLABS_API_KEY, GOOGLE_API_KEY, OPENAI_API_KEY, VBEE_APP_ID, VBEE_API_TOKEN
 
 
 class TTSError(Exception):
@@ -617,6 +617,192 @@ class GeminiTTSEngine(TTSEngine):
             raise TTSError(f"Gemini TTS failed: {e}") from e
 
 
+# ── Vbee TTS Engine ──
+
+
+class VbeeTTSEngine(TTSEngine):
+    """Vbee AIVoice TTS — best Vietnamese voice quality, lowest cost.
+
+    Cost: ~181 VND per video (Tiêu chuẩn plan, 39K/month for 250K chars).
+    Quality: Best Vietnamese pronunciation with regional accents (Bắc/Trung/Nam).
+    Note: No native word timestamps → requires Whisper alignment.
+    API: Callback-based → we use polling via Get Request endpoint.
+    """
+
+    API_BASE = "https://vbee.vn/api/v1/tts"
+    DEFAULT_VOICE = "n_hanoi_male_nhabaohoangnam_news_vc"
+    VOICES = {
+        "phong_vien_nam": "n_hanoi_male_nhabaohoangnam_news_vc",
+        "tuan_anh_news": "n_hanoi_male_tuananhnews_news_vc",
+        "bao_trung_mc": "n_hanoi_male_baotrungmc_news_vc",
+        "mr_cu": "n_hanoi_male_sizonguyen_education_vc",
+    }
+    POLL_INTERVAL = 1.5  # seconds between polls
+    POLL_TIMEOUT = 30    # max wait seconds
+
+    def __init__(self, app_id: str | None = None, api_token: str | None = None):
+        self.app_id = app_id or VBEE_APP_ID
+        self.api_token = api_token or VBEE_API_TOKEN
+        if not self.app_id or not self.api_token:
+            raise TTSError(
+                "VBEE_APP_ID and VBEE_API_TOKEN not configured. "
+                "Get credentials at https://vbee.vn"
+            )
+
+    async def synthesize(
+        self,
+        text: str,
+        voice: str = "n_hanoi_male_nhabaohoangnam_news_vc",
+        rate: float = 1.0,
+        volume: float = 1.0,
+        output_dir: str | Path | None = None,
+    ) -> TTSResult:
+        """Synthesize text using Vbee AIVoice API.
+
+        Uses callback-based API with polling: POST → poll GET until SUCCESS
+        → download audio from audio_link.
+
+        Args:
+            text: Text to synthesize.
+            voice: Vbee voice code (e.g. n_hanoi_male_nhabaohoangnam_news_vc).
+            rate: Speech rate (min 0.1, default 1.0).
+            volume: Volume (not supported by Vbee API, ignored).
+            output_dir: Directory to save the MP3 file.
+
+        Returns:
+            TTSResult with MP3 audio. No word_boundaries (Whisper will handle).
+
+        Raises:
+            TTSError: If API call or polling fails.
+        """
+        import asyncio
+
+        import httpx
+
+        # Resolve voice alias → full code
+        voice = self.VOICES.get(voice, voice)
+
+        logger.info(
+            "Vbee TTS: synthesizing {} chars, voice={}, speed={}",
+            len(text), voice, rate,
+        )
+
+        headers = {"Authorization": f"Bearer {self.api_token}"}
+
+        try:
+            # ── Step 1: Create speech request ──
+            async with httpx.AsyncClient(timeout=15) as client:
+                resp = await client.post(
+                    self.API_BASE,
+                    json={
+                        "app_id": self.app_id,
+                        "input_text": text,
+                        "voice_code": voice,
+                        "speed_rate": max(0.1, rate),
+                        "audio_type": "mp3",
+                        "bitrate": 128,
+                        "response_type": "indirect",
+                        "callback_url": "https://example.com/noop",
+                    },
+                    headers=headers,
+                )
+                resp.raise_for_status()
+                create_data = resp.json()
+
+            request_id = create_data.get("request_id")
+            if not request_id:
+                raise TTSError(
+                    f"Vbee TTS: no request_id in response: {create_data}"
+                )
+
+            logger.debug("Vbee TTS: request_id={}, polling...", request_id)
+
+            # ── Step 2: Poll for completion ──
+            audio_link = None
+            polls = int(self.POLL_TIMEOUT / self.POLL_INTERVAL)
+
+            for attempt in range(polls):
+                await asyncio.sleep(self.POLL_INTERVAL)
+
+                async with httpx.AsyncClient(timeout=10) as client:
+                    poll_resp = await client.get(
+                        f"{self.API_BASE}/{request_id}",
+                        headers=headers,
+                    )
+                    poll_data = poll_resp.json()
+
+                # Response: {"status": 1, "result": {"status": "SUCCESS", ...}}
+                result = poll_data.get("result", {})
+                req_status = result.get("status", "")
+                progress = result.get("progress", "?")
+
+                if req_status == "SUCCESS":
+                    audio_link = result.get("audio_link")
+                    logger.debug(
+                        "Vbee TTS: SUCCESS after {} polls, audio_link={}",
+                        attempt + 1, audio_link,
+                    )
+                    break
+                elif req_status == "FAILED":
+                    raise TTSError(
+                        f"Vbee TTS request failed: {poll_data}"
+                    )
+                else:
+                    logger.debug(
+                        "Vbee TTS: poll {}/{}, status={}, progress={}",
+                        attempt + 1, polls, req_status, progress,
+                    )
+
+            if not audio_link:
+                raise TTSError(
+                    f"Vbee TTS timed out after {self.POLL_TIMEOUT}s "
+                    f"(request_id={request_id})"
+                )
+
+            # ── Step 3: Download audio ──
+            async with httpx.AsyncClient(timeout=30) as client:
+                audio_resp = await client.get(audio_link)
+                audio_resp.raise_for_status()
+                audio_bytes = audio_resp.content
+
+            if not audio_bytes or len(audio_bytes) < 100:
+                raise TTSError("Vbee TTS returned empty or too-small audio")
+
+            # ── Step 4: Save to file ──
+            if output_dir:
+                out_dir = Path(output_dir)
+                out_dir.mkdir(parents=True, exist_ok=True)
+                audio_path = out_dir / "full.mp3"
+            else:
+                tmp = tempfile.NamedTemporaryFile(
+                    suffix=".mp3", delete=False
+                )
+                audio_path = Path(tmp.name)
+                tmp.close()
+
+            audio_path.write_bytes(audio_bytes)
+
+            # Accurate duration via mutagen
+            duration_ms = _get_audio_duration_ms(str(audio_path))
+
+            logger.info(
+                "Vbee TTS complete: {} bytes, {:.0f}ms, saved to {}",
+                len(audio_bytes), duration_ms, audio_path,
+            )
+
+            return TTSResult(
+                audio_bytes=audio_bytes,
+                audio_path=str(audio_path),
+                duration_ms=duration_ms,
+                # No word_boundaries → Whisper will handle
+            )
+
+        except Exception as e:
+            if "TTSError" in type(e).__name__:
+                raise
+            raise TTSError(f"Vbee TTS failed: {e}") from e
+
+
 # ── Engine Factory ──
 
 
@@ -627,7 +813,7 @@ def get_tts_engine(engine_name: str = "openai", **kwargs) -> TTSEngine:
     """Factory function to get a TTS engine by name.
 
     Args:
-        engine_name: "openai", "edge-tts", "elevenlabs", or "gemini".
+        engine_name: "openai", "edge-tts", "elevenlabs", "gemini", or "vbee".
         **kwargs: Engine-specific options (e.g. elevenlabs_model, gemini_model).
 
     Returns:
@@ -657,10 +843,12 @@ def get_tts_engine(engine_name: str = "openai", **kwargs) -> TTSEngine:
     elif engine_name == "gemini":
         model = kwargs.get("gemini_model", GeminiTTSEngine.DEFAULT_MODEL)
         engine = GeminiTTSEngine(model=model)
+    elif engine_name == "vbee":
+        engine = VbeeTTSEngine()
     else:
         raise ValueError(
             f"Unknown TTS engine: {engine_name}. "
-            "Use 'openai', 'edge-tts', 'elevenlabs', or 'gemini'."
+            "Use 'openai', 'edge-tts', 'elevenlabs', 'gemini', or 'vbee'."
         )
 
     _tts_engine_cache[cache_key] = engine
