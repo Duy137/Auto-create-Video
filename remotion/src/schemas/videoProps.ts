@@ -79,6 +79,7 @@ const SceneSchema = z.object({
     "comparison",
     "media_showcase",
     "timeline",
+    "news_intro",
   ]),
   narration: z.string(),
 

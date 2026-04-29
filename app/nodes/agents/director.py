@@ -81,10 +81,10 @@ YOUR RESPONSIBILITIES:
 3. For EACH scene, assign scene_type based on purpose.
 4. Choose a background_preset matching the topic.
 
-SCENE TYPE OPTIONS: title_card, stock_background, info_card, stats_highlight, diagram, emoji_grid, comparison, media_showcase, timeline
+SCENE TYPE OPTIONS: title_card, stock_background, info_card, stats_highlight, diagram, emoji_grid, comparison, media_showcase, timeline, news_intro
 
 SCENE TYPE RULES:
-- "hook" → title_card
+- "hook" → news_intro
 - "conclude" → title_card OR stock_background
 - "explain" → media_showcase or stock_background
 - "list_steps" → info_card or timeline
@@ -135,6 +135,7 @@ DIRECTOR_SCHEMA = {
                             "comparison",
                             "media_showcase",
                             "timeline",
+                            "news_intro",
                         ],
                     },
                 },
@@ -164,7 +165,7 @@ DEFAULT_PALETTE = {
 }
 
 PURPOSE_TO_SCENE_TYPE = {
-    "hook": "title_card",
+    "hook": "news_intro",
     "explain": "stock_background",
     "list_steps": "info_card",
     "data_visual": "stats_highlight",
@@ -182,6 +183,7 @@ SCENE_TYPE_DEFAULT_LAYOUT = {
     "comparison": "center_focus",
     "media_showcase": "center_focus",
     "timeline": "center_focus",
+    "news_intro": "media_overlay",
 }
 
 
@@ -253,6 +255,7 @@ def validate_direction(direction: dict[str, Any], num_scenes: int) -> dict[str, 
         "comparison": {"center_focus"},
         "media_showcase": {"center_focus"},
         "timeline": {"center_focus"},
+        "news_intro": {"media_overlay"},
     }
 
     # Transition pool — weighted toward smooth transitions

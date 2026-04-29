@@ -36,7 +36,7 @@ const TRANSITION_LABELS: Record<string, string> = {
 
 // Only these scene types use external stock media (Pexels).
 // Other types render gradient/animated backgrounds — no media needed.
-const NEEDS_MEDIA = new Set(['stock_background', 'media_showcase'])
+const NEEDS_MEDIA = new Set(['stock_background', 'media_showcase', 'news_intro'])
 
 const SCENE_TYPE_LABELS: Record<string, string> = {
   title_card: 'Thẻ tiêu đề',
@@ -48,6 +48,7 @@ const SCENE_TYPE_LABELS: Record<string, string> = {
   comparison: 'So sánh',
   media_showcase: 'Trình chiếu media',
   timeline: 'Dòng thời gian',
+  news_intro: 'Tin tức mở đầu',
 }
 
 interface ComparisonSide {
@@ -261,6 +262,29 @@ function ScenePreviewMockup({ scene, palette }: { scene: Scene; palette: Record<
         </div>
       )
     }
+
+    case 'news_intro':
+      return (
+        <div className="w-full h-full flex flex-col relative" style={{ background: '#0a1200' }}>
+          {/* Top half: media placeholder */}
+          <div className="flex-1 flex items-center justify-center bg-gradient-to-b from-zinc-800/60 to-transparent">
+            <ImageIcon className="w-8 h-8 text-white/20" />
+          </div>
+          {/* Bottom half: brand overlay mockup */}
+          <div className="absolute bottom-0 left-0 right-0 h-[55%] bg-gradient-to-b from-transparent via-[#0a1200]/80 to-[#0a1200]/95 flex flex-col justify-center px-4 gap-2">
+            <div className="w-10 h-[2px] rounded-full" style={{ backgroundColor: '#C6FD01' }} />
+            <div className="flex items-center gap-2">
+              <div className="w-7 h-7 rounded-md bg-[#C6FD01]/20 flex items-center justify-center">
+                <span className="text-[8px] font-black" style={{ color: '#C6FD01' }}>CV</span>
+              </div>
+              <span className="text-sm font-extrabold" style={{ color: '#C6FD01' }}>CryptoVN 101</span>
+            </div>
+            <p className="text-[11px] font-bold leading-tight line-clamp-3 uppercase" style={{ color: '#fff' }}>
+              {scene.narration?.slice(0, 80)}
+            </p>
+          </div>
+        </div>
+      )
 
     default:
       return (

@@ -193,7 +193,7 @@ For title_lines, top_badge, top_icon: set to null if the scene_type is not "titl
     - Success/Achievement: 🏆 ⭐ 🎉 👑 🥇
     - Data/Analytics: 📊 📉 🔢 📋 🗂️
     
-    ONLY set to null for title_card scenes. For ALL other scenes, you MUST choose one emoji.
+    ONLY set to null for title_card and news_intro scenes. For ALL other scenes, you MUST choose one emoji.
 
 DO NOT choose colors or scene types — the Director has already decided those."""
 
@@ -720,6 +720,9 @@ def _auto_layout(scene_type: str, enricher_data: dict) -> str:
 
     elif scene_type == "stock_background":
         return "media_overlay"  # media is the point of this scene type
+
+    elif scene_type == "news_intro":
+        return "media_overlay"  # news intro always shows media behind brand overlay
 
     # All other scene types have only 1 valid layout
     return "center_focus"

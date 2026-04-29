@@ -40,6 +40,7 @@ import { EmojiGrid } from "./scenes/EmojiGrid";
 import { Comparison } from "./scenes/Comparison";
 import { MediaShowcase } from "./scenes/MediaShowcase";
 import { Timeline } from "./scenes/Timeline";
+import { NewsIntro } from "./scenes/NewsIntro";
 
 // Shared components & utilities
 import { AnimatedCaption } from "./components/AnimatedCaption";
@@ -82,6 +83,8 @@ const SceneRenderer: React.FC<{
       return <MediaShowcase scene={scene} colorPalette={colorPalette} />;
     case "timeline":
       return <Timeline scene={scene} colorPalette={colorPalette} wordTimestamps={wordTimestamps} />;
+    case "news_intro":
+      return <NewsIntro scene={scene} colorPalette={colorPalette} />;
     default:
       return <StockBackground scene={scene} colorPalette={colorPalette} wordTimestamps={wordTimestamps} />;
   }
@@ -232,7 +235,7 @@ const SceneWithEntryMotion: React.FC<{
     >
       <SceneRenderer scene={scene} colorPalette={colorPalette} wordTimestamps={wordTimestamps} />
       {/* Emoji pop-up overlay (per-scene, not on title_card) */}
-      {scene.emoji && scene.sceneType !== "title_card" && (
+      {scene.emoji && scene.sceneType !== "title_card" && scene.sceneType !== "news_intro" && (
         <EmojiPopup
           emoji={scene.emoji}
           narration={scene.narration}

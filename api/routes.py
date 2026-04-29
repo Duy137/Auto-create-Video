@@ -902,7 +902,7 @@ async def re_search_scene_media(
 
     scene = scenes[scene_index]
     scene_type = scene.get("scene_type", "stock_background")
-    prefer_video = scene_type == "stock_background"
+    prefer_video = scene_type in ("stock_background", "news_intro")
 
     try:
         result = await search_media(

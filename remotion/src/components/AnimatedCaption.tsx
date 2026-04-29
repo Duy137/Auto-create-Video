@@ -86,7 +86,7 @@ interface AnimatedCaptionProps {
 }
 
 /** Scenes that already display their own text — captions disabled */
-const CAPTION_DISABLED_TYPES = new Set(["title_card", "stock_background"]);
+const CAPTION_DISABLED_TYPES = new Set(["title_card", "stock_background", "news_intro"]);
 
 const withHexAlpha = (hexColor: string, alpha: number): string => {
   const clampedAlpha = Math.max(0, Math.min(1, alpha));

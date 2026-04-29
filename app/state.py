@@ -81,7 +81,7 @@ class TimelineEvent(BaseModel):
 
 class Scene(BaseModel):
     scene_index: int
-    scene_type: str  # title_card | stock_background | info_card | stats_highlight | diagram | emoji_grid | comparison | media_showcase | timeline
+    scene_type: str  # title_card | stock_background | info_card | stats_highlight | diagram | emoji_grid | comparison | media_showcase | timeline | news_intro
     narration: str
     visual_description: str
 
