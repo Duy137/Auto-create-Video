@@ -28,7 +28,7 @@ async def align_words(
     audio_path: str | Path,
     original_text: str,
     language: str = "vi",
-    model_name: str = "base",
+    model_name: str = "small",
 ) -> list[WordTimestamp]:
     """Force-align known text to audio using stable-ts.
 

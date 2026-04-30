@@ -395,6 +395,44 @@ def _compute_scene_timing(
             scenes, total_duration_ms, processed_word_counts,
         )
 
+    # ── Alignment quality validation ──
+    # Even if word count matches, timestamps may be catastrophically wrong
+    # (e.g. stable-ts fails on Vietnamese audio from certain TTS engines)
+
+    # Check 1: Collapsed timestamps (start ≈ end → alignment couldn't place word)
+    collapsed = sum(
+        1 for wt in word_timestamps if wt["end_ms"] - wt["start_ms"] < 10
+    )
+    collapsed_ratio = collapsed / ts_count if ts_count > 0 else 0
+    if collapsed_ratio > 0.15:
+        logger.warning(
+            "Alignment quality poor: {}/{} words collapsed ({:.0%}). "
+            "Falling back to proportional timing.",
+            collapsed, ts_count, collapsed_ratio,
+        )
+        return _compute_scene_timing_proportional(
+            scenes, total_duration_ms, processed_word_counts,
+        )
+
+    # Check 2: Large gaps between consecutive words (misalignment)
+    max_gap_ms = 0.0
+    gap_word_idx = 0
+    for k in range(1, ts_count):
+        gap = word_timestamps[k]["start_ms"] - word_timestamps[k - 1]["end_ms"]
+        if gap > max_gap_ms:
+            max_gap_ms = gap
+            gap_word_idx = k
+    if max_gap_ms > 5000:
+        logger.warning(
+            "Alignment has {:.0f}ms gap at word {} '{}'. "
+            "Falling back to proportional timing.",
+            max_gap_ms, gap_word_idx,
+            word_timestamps[gap_word_idx].get("text", "?"),
+        )
+        return _compute_scene_timing_proportional(
+            scenes, total_duration_ms, processed_word_counts,
+        )
+
     # Distribute timestamps to scenes proportionally
     ts_idx = 0
     for i, scene in enumerate(scenes):
