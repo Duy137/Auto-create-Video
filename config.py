@@ -24,6 +24,9 @@ QWEN_RERANK_URL: str = os.getenv(
     "QWEN_RERANK_URL",
     "https://dashscope-intl.aliyuncs.com/compatible-api/v1/reranks",
 )
+VBEE_APP_ID: str = os.getenv("VBEE_APP_ID", "")  # Vbee Vietnamese TTS
+VBEE_API_TOKEN: str = os.getenv("VBEE_API_TOKEN", "")  # Vbee API JWT token
+
 
 # ── Auth ──
 JWT_SECRET_KEY: str = os.getenv("JWT_SECRET_KEY", "dev-secret-change-me")
@@ -59,7 +62,8 @@ if JOB_STORE_BACKEND not in {"auto", "redis", "file"}:
     JOB_STORE_BACKEND = "auto"
 
 # ── TTS ──
-DEFAULT_TTS_ENGINE: str = os.getenv("DEFAULT_TTS_ENGINE", "openai")  # "openai" | "edge-tts"
+DEFAULT_TTS_ENGINE: str = os.getenv("DEFAULT_TTS_ENGINE", "openai")
+# Options: "openai" | "edge-tts" | "elevenlabs" | "gemini" | "vbee"
 DEFAULT_VOICE: str = os.getenv("DEFAULT_VOICE", "nova")
 
 # ── Content Parser LLM ──
