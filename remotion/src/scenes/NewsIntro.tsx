@@ -203,7 +203,7 @@ export const NewsIntro: React.FC<NewsIntroProps> = ({
       <AbsoluteFill
         style={{
           background:
-            "linear-gradient(to bottom, transparent 0%, transparent 40%, rgba(8,15,0,0.5) 52%, rgba(8,15,0,0.82) 64%, rgba(5,10,0,0.95) 80%, rgba(3,6,0,0.99) 100%)",
+            "linear-gradient(to bottom, transparent 0%, transparent 30%, rgba(5,10,0,0.6) 42%, rgba(5,10,0,0.92) 55%, rgba(3,6,0,0.98) 70%, rgba(2,4,0,1) 100%)",
           opacity: overlayOpacity,
         }}
       />
@@ -215,13 +215,14 @@ export const NewsIntro: React.FC<NewsIntroProps> = ({
           bottom: 0,
           left: 0,
           right: 0,
-          height: "50%",
+          height: "60%",
           opacity: overlayOpacity,
           WebkitMaskImage:
-            "linear-gradient(to bottom, transparent 0%, black 30%)",
+            "linear-gradient(to bottom, transparent 0%, black 20%)",
           maskImage:
-            "linear-gradient(to bottom, transparent 0%, black 30%)",
+            "linear-gradient(to bottom, transparent 0%, black 20%)",
           overflow: "hidden",
+          filter: "blur(2px)",
         }}
       >
         <Img
@@ -230,7 +231,7 @@ export const NewsIntro: React.FC<NewsIntroProps> = ({
             width: "100%",
             height: "100%",
             objectFit: "cover",
-            opacity: 0.45,
+            opacity: 0.35,
           }}
         />
       </div>
@@ -250,7 +251,7 @@ export const NewsIntro: React.FC<NewsIntroProps> = ({
           position: "absolute",
           top: "50%",
           left: 50,
-          right: 220,
+          right: 120,
           opacity: overlayOpacity,
           transform: `translateY(${overlayTranslateY}px)`,
           display: "flex",
@@ -305,10 +306,7 @@ export const NewsIntro: React.FC<NewsIntroProps> = ({
             color: "#FFFFFF",
             lineHeight: 1.3,
             textShadow: "0 2px 12px rgba(0,0,0,0.5)",
-            display: "-webkit-box",
-            WebkitLineClamp: 4,
-            WebkitBoxOrient: "vertical",
-            overflow: "hidden",
+
             textTransform: "uppercase",
           }}
         >
