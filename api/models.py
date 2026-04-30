@@ -75,7 +75,7 @@ class JobSettings(BaseModel):
     """User-configurable video settings from the 3-panel UI."""
     # Video & Audio (Middle panel)
     aspect_ratio: str = Field(default="9:16", pattern=r"^(9:16|16:9)$")
-    tts_engine: str = Field(default="openai", pattern=r"^(openai|edge-tts)$")
+    tts_engine: str = Field(default="openai", pattern=r"^(openai|edge-tts|elevenlabs|gemini|vbee)$")
     voice: str = Field(default="nova")
     speech_rate: float = Field(default=1.0, ge=0.8, le=2.0)
     speech_volume: float = Field(default=1.0, ge=0.6, le=3.0)
@@ -133,7 +133,7 @@ class JobListResponse(BaseModel):
 
 class VoicePreviewRequest(BaseModel):
     text: str = Field(..., min_length=1, max_length=500)
-    engine: str = Field(default="openai", pattern=r"^(openai|edge-tts|elevenlabs|gemini)$")
+    engine: str = Field(default="openai", pattern=r"^(openai|edge-tts|elevenlabs|gemini|vbee)$")
     voice: str = Field(default="nova")
     rate: float = Field(default=1.0, ge=0.8, le=2.0)
 
