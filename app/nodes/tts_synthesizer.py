@@ -703,7 +703,8 @@ class VbeeTTSEngine(TTSEngine):
                 resp.raise_for_status()
                 create_data = resp.json()
 
-            request_id = create_data.get("request_id")
+            # request_id may be at top-level or nested inside "result"
+            request_id = create_data.get("request_id") or create_data.get("result", {}).get("request_id")
             if not request_id:
                 raise TTSError(
                     f"Vbee TTS: no request_id in response: {create_data}"
