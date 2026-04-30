@@ -241,3 +241,52 @@ git reset --hard backup-before-merge
 | Lấy commit cụ thể | `git cherry-pick <hash> --no-commit` |
 | Kiểm tra trước commit | `git diff --cached --stat` |
 | Rollback | `git reset --hard backup-before-merge` |
+
+---
+
+## 8. Làm Việc Nhóm: Xử Lý Khi Người Khác Push Code Trước Bạn (Diverged Branch)
+
+### Vấn đề:
+Khi làm việc trên **Repo Trường (Upstream)**, nếu bạn vừa commit xong và chuẩn bị gõ `git push`, nhưng Git lại báo lỗi (hoặc trên giao diện VS Code báo cây thư mục bị rẽ nhánh - Diverged).
+
+**Lý do:** Trong lúc bạn đang code, một thành viên khác trong nhóm đã `push` một đoạn code mới lên đúng branch đó. Mã nguồn trên máy bạn và trên server GitHub không còn khớp nhau.
+
+### Giải pháp: Kéo code mới về và đặt code của bạn lên trên (Rebase)
+
+Bạn không được push đè lên (sẽ mất code của bạn bè). Bạn phải kéo (pull) code của họ về máy trước, sau đó mới đẩy lên. Cách chuyên nghiệp nhất là dùng `pull --rebase`.
+
+#### Bước 1: Kéo code về bằng Rebase
+Gõ lệnh sau trong terminal:
+```powershell
+git pull --rebase origin <tên-branch>
+# Ví dụ: git pull --rebase origin UpgradeOutput
+```
+*Lệnh này làm gì? Nó sẽ tạm cất commit của bạn đi, kéo toàn bộ code mới của thành viên kia về máy, sau đó áp dụng lại commit của bạn lên trên cùng.*
+
+#### Bước 2: Xử lý kết quả
+Sẽ có 2 trường hợp xảy ra:
+
+**Trường hợp A: Tự động thành công (Automatic rebase went well)**
+Nếu bạn và người kia sửa 2 file khác nhau (hoặc khác dòng), Git sẽ tự động gộp. 
+- Giờ bạn có thể an tâm gõ: `git push origin <tên-branch>`
+
+**Trường hợp B: Bị xung đột (CONFLICT)**
+Nếu cả 2 người cùng sửa một dòng, quá trình rebase sẽ tạm dừng và báo lỗi.
+1. Mở VS Code, tìm các file bị đỏ.
+2. Bấm chọn `Accept Current Change` (Lấy code của team) hoặc `Accept Incoming Change` (Lấy code của bạn) để sửa cho đúng logic.
+3. Sau khi sửa và lưu file xong, gõ:
+   ```powershell
+   git add .
+   ```
+   *(Lưu ý: Chỉ `git add`, **KHÔNG** `git commit` lúc này).*
+4. Cho quá trình rebase tiếp tục chạy:
+   ```powershell
+   git rebase --continue
+   ```
+5. Khi terminal báo rebase hoàn thành, hãy đẩy lên GitHub:
+   ```powershell
+   git push origin <tên-branch>
+   ```
+
+*(Ghi chú: Nếu Rebase bị rối và bạn muốn hủy bỏ toàn bộ thao tác để hỏi ý kiến team, hãy gõ lệnh thoát hiểm: `git rebase --abort`).*
+
