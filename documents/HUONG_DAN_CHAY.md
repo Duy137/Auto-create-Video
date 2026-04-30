@@ -158,10 +158,13 @@ pytest -q                       # nhanh, ít output
 | `JWT_SECRET_KEY` | `your-secret` | Key tạo token đăng nhập |
 | `OUTPUT_DIR` | `output` | Thư mục lưu output |
 | `REMOTION_DIR` | `remotion` | Thư mục Remotion |
-| `DEFAULT_TTS_ENGINE` | `openai` | `openai` hoặc `edge-tts` |
+| `DEFAULT_TTS_ENGINE` | `openai` | `openai`, `elevenlabs`, `gemini`, hoặc `edge-tts` |
 | `DEFAULT_VOICE` | `nova` | Giọng mặc định |
 | `FFMPEG_PATH` | — | Đường dẫn ffmpeg nếu không có trong PATH |
 | `PORT` | `8000` | Port FastAPI |
+| `QWEN_API_KEY` | — | Tuỳ chọn (DashScope — dùng cho media reranking) |
+| `QWEN_RERANK_URL` | `https://dashscope-intl.aliyuncs.com/compatible-api/v1/reranks` | Endpoint DashScope Rerank API |
+| `VLM_RERANK_MODEL` | `qwen3-rerank` | Model rerank (`qwen3-rerank` hoặc `qwen3-vl-rerank`) |
 
 ---
 

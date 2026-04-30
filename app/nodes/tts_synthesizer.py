@@ -14,19 +14,28 @@ See MASTER_PLAN section "Component 2A — TTS Synthesizer" for full spec.
 
 from __future__ import annotations
 
+import asyncio
 import base64
+import importlib
 import io
+import shutil
 import subprocess
 import tempfile
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Any
 
+import httpx
 from loguru import logger
 from openai import AsyncOpenAI
 
 from app.state import WordTimestamp
-from config import ELEVENLABS_API_KEY, GOOGLE_API_KEY, OPENAI_API_KEY, VBEE_APP_ID, VBEE_API_TOKEN
+from config import (
+    ELEVENLABS_API_KEY,
+    GOOGLE_API_KEY,
+    OPENAI_API_KEY,
+)
 
 
 class TTSError(Exception):
@@ -73,185 +82,13 @@ class TTSEngine(ABC):
         pass
 
 
-class OpenAITTSEngine(TTSEngine):
-    """OpenAI gpt-4o-mini-tts engine — primary TTS.
-
-    Cost: ~380 VND per minute of audio.
-    Quality: Natural Vietnamese-English code-switching.
-    Note: Word-level timestamps require separate Whisper alignment step.
-    """
-
-    def __init__(self, api_key: str | None = None):
-        self.api_key = api_key or OPENAI_API_KEY
-        if not self.api_key:
-            raise TTSError("OPENAI_API_KEY not configured")
-        self.client = AsyncOpenAI(api_key=self.api_key)
-
-    async def synthesize(
-        self,
-        text: str,
-        voice: str = "nova",
-        rate: float = 1.0,
-        volume: float = 1.0,
-        output_dir: str | Path | None = None,
-    ) -> TTSResult:
-        """Synthesize text using OpenAI gpt-4o-mini-tts.
-
-        Args:
-            text: Text to synthesize.
-            voice: OpenAI voice name (alloy, echo, fable, onyx, nova, shimmer).
-            rate: Speech rate (0.25–4.0 for OpenAI).
-            volume: Not directly supported by OpenAI API, ignored.
-            output_dir: Directory to save the MP3 file.
-
-        Returns:
-            TTSResult with MP3 audio.
-
-        Raises:
-            TTSError: If API call fails.
-        """
-        logger.info(
-            "OpenAI TTS: synthesizing {} chars, voice={}, rate={}",
-            len(text), voice, rate,
-        )
-
-        try:
-            response = await self.client.audio.speech.create(
-                model="gpt-4o-mini-tts",
-                voice=voice,
-                input=text,
-                speed=rate,
-                response_format="mp3",
-            )
-
-            audio_bytes = response.content
-
-            if not audio_bytes or len(audio_bytes) < 100:
-                raise TTSError("OpenAI TTS returned empty or too-small audio")
-
-            # Save to file
-            if output_dir:
-                out_dir = Path(output_dir)
-                out_dir.mkdir(parents=True, exist_ok=True)
-                audio_path = out_dir / "full.mp3"
-            else:
-                tmp = tempfile.NamedTemporaryFile(
-                    suffix=".mp3", delete=False
-                )
-                audio_path = Path(tmp.name)
-                tmp.close()
-
-            audio_path.write_bytes(audio_bytes)
-
-            # Accurate duration via mutagen
-            estimated_duration_ms = _get_audio_duration_ms(str(audio_path))
-
-            logger.info(
-                "OpenAI TTS complete: {} bytes, ~{:.0f}ms, saved to {}",
-                len(audio_bytes), estimated_duration_ms, audio_path,
-            )
-
-            return TTSResult(
-                audio_bytes=audio_bytes,
-                audio_path=str(audio_path),
-                duration_ms=estimated_duration_ms,
-            )
-
-        except Exception as e:
-            if "TTSError" in type(e).__name__:
-                raise
-            raise TTSError(f"OpenAI TTS failed: {e}") from e
-
-
-class EdgeTTSEngine(TTSEngine):
-    """Edge-TTS engine — free Microsoft TTS fallback.
-
-    Cost: FREE (uses Microsoft Edge's cloud TTS).
-    Quality: Good Vietnamese support.
-    Voices: vi-VN-HoaiMyNeural (female), vi-VN-NamMinhNeural (male).
-    """
-
-    async def synthesize(
-        self,
-        text: str,
-        voice: str = "vi-VN-HoaiMyNeural",
-        rate: float = 1.0,
-        volume: float = 1.0,
-        output_dir: str | Path | None = None,
-    ) -> TTSResult:
-        import edge_tts
-
-        logger.info(
-            "Edge TTS: synthesizing {} chars, voice={}, rate={}",
-            len(text), voice, rate,
-        )
-
-        # Edge-TTS rate format: "+20%" or "-10%"
-        rate_pct = int((rate - 1.0) * 100)
-        rate_str = f"+{rate_pct}%" if rate_pct >= 0 else f"{rate_pct}%"
-
-        try:
-            communicate = edge_tts.Communicate(text, voice, rate=rate_str)
-
-            audio_chunks = []
-            async for chunk in communicate.stream():
-                if chunk["type"] == "audio":
-                    audio_chunks.append(chunk["data"])
-
-            audio_bytes = b"".join(audio_chunks)
-
-            if not audio_bytes or len(audio_bytes) < 100:
-                raise TTSError("Edge TTS returned empty audio")
-
-            # Save to file
-            if output_dir:
-                out_dir = Path(output_dir)
-                out_dir.mkdir(parents=True, exist_ok=True)
-                audio_path = out_dir / "full.mp3"
-            else:
-                tmp = tempfile.NamedTemporaryFile(suffix=".mp3", delete=False)
-                audio_path = Path(tmp.name)
-                tmp.close()
-
-            audio_path.write_bytes(audio_bytes)
-
-            # Accurate duration via mutagen
-            estimated_duration_ms = _get_audio_duration_ms(str(audio_path))
-
-            logger.info(
-                "Edge TTS complete: {} bytes, ~{:.0f}ms, saved to {}",
-                len(audio_bytes), estimated_duration_ms, audio_path,
-            )
-
-            return TTSResult(
-                audio_bytes=audio_bytes,
-                audio_path=str(audio_path),
-                duration_ms=estimated_duration_ms,
-            )
-
-        except Exception as e:
-            if "TTSError" in type(e).__name__:
-                raise
-            raise TTSError(f"Edge TTS failed: {e}") from e
-
-
-# ── Shared Helpers ──
-
-
-def _get_audio_duration_ms(audio_path: str) -> float:
-    """Get accurate audio duration using mutagen. Fallback to byte estimate."""
+def _resolve_ffmpeg_executable() -> str:
+    """Resolve ffmpeg executable from imageio-ffmpeg or PATH."""
     try:
-        from mutagen.mp3 import MP3
-
-        audio = MP3(audio_path)
-        duration_ms = audio.info.length * 1000
-        logger.debug("Audio duration (mutagen): {:.0f}ms", duration_ms)
-        return duration_ms
-    except Exception as e:
-        # Fallback: byte-size estimate (MP3 ~128kbps → 16KB/s)
-        logger.warning("mutagen failed ({}), using byte estimate", e)
-        file_size = Path(audio_path).stat().st_size
-        return (file_size / 16000) * 1000
+        imageio_ffmpeg = importlib.import_module("imageio_ffmpeg")
+        return str(imageio_ffmpeg.get_ffmpeg_exe())
+    except Exception:
+        return shutil.which("ffmpeg") or "ffmpeg"
 
 
 def _apply_speech_rate_ffmpeg(
@@ -259,33 +96,27 @@ def _apply_speech_rate_ffmpeg(
     output_path: str | Path,
     rate: float,
 ) -> None:
-    """Change speech rate using ffmpeg atempo filter.
+    """Adjust speech rate using ffmpeg atempo filter."""
+    if rate <= 0:
+        raise TTSError("Speech rate must be positive")
 
-    Supports any rate from 0.5x to 4.0x without audio artifacts.
-    For rates outside atempo's native 0.5–2.0 range, chains multiple filters.
+    remaining_rate = rate
+    filters: list[str] = []
 
-    Args:
-        input_path: Path to input audio file.
-        output_path: Path to write rate-adjusted audio.
-        rate: Playback speed multiplier (0.5–4.0).
-    """
-    rate = max(0.5, min(rate, 4.0))
+    while remaining_rate > 2.0:
+        filters.append("atempo=2.0")
+        remaining_rate /= 2.0
 
-    # atempo filter supports 0.5–2.0, chain for values outside range
-    atempo_filters = []
-    remaining = rate
-    while remaining > 2.0:
-        atempo_filters.append("atempo=2.0")
-        remaining /= 2.0
-    while remaining < 0.5:
-        atempo_filters.append("atempo=0.5")
-        remaining /= 0.5
-    atempo_filters.append(f"atempo={remaining:.4f}")
+    while remaining_rate < 0.5:
+        filters.append("atempo=0.5")
+        remaining_rate /= 0.5
 
-    filter_chain = ",".join(atempo_filters)
+    filters.append(f"atempo={remaining_rate:.4f}")
+    filter_chain = ",".join(filters)
+    ffmpeg_exe = _resolve_ffmpeg_executable()
 
     cmd = [
-        "ffmpeg", "-y", "-i", str(input_path),
+        ffmpeg_exe, "-y", "-i", str(input_path),
         "-filter:a", filter_chain,
         "-q:a", "2",
         str(output_path),
@@ -296,9 +127,43 @@ def _apply_speech_rate_ffmpeg(
             cmd, check=True, capture_output=True, timeout=30,
         )
         logger.debug("ffmpeg atempo applied: rate={}, filter={}", rate, filter_chain)
+    except FileNotFoundError as e:
+        raise TTSError(
+            "ffmpeg is required for speech rate adjustment but was not found in PATH"
+        ) from e
     except subprocess.CalledProcessError as e:
         logger.warning("ffmpeg atempo failed: {}", e.stderr.decode()[:200])
         raise TTSError(f"ffmpeg speed adjustment failed: {e}") from e
+
+
+def _convert_audio_to_mp3_ffmpeg(
+    input_path: str | Path,
+    output_path: str | Path,
+) -> None:
+    """Transcode audio to MP3 using ffmpeg.
+
+    This avoids pydub/audioop runtime issues on newer Python versions.
+    """
+    ffmpeg_exe = _resolve_ffmpeg_executable()
+
+    cmd = [
+        ffmpeg_exe, "-y", "-i", str(input_path),
+        "-vn", "-acodec", "libmp3lame", "-b:a", "128k",
+        str(output_path),
+    ]
+
+    try:
+        subprocess.run(
+            cmd, check=True, capture_output=True, timeout=30,
+        )
+        logger.debug("ffmpeg transcode complete: {} -> {}", input_path, output_path)
+    except FileNotFoundError as e:
+        raise TTSError(
+            "ffmpeg is required for audio conversion but was not found in PATH"
+        ) from e
+    except subprocess.CalledProcessError as e:
+        logger.warning("ffmpeg transcode failed: {}", e.stderr.decode()[:200])
+        raise TTSError(f"ffmpeg conversion failed: {e}") from e
 
 
 def _chars_to_word_timestamps(
@@ -343,6 +208,140 @@ def _chars_to_word_timestamps(
         ))
 
     return words
+
+
+def _get_audio_duration_ms(audio_path: str) -> float:
+    """Get accurate audio duration using mutagen. Fallback to a byte estimate."""
+    try:
+        from mutagen import File as MutagenFile
+
+        audio = MutagenFile(audio_path)
+        if audio is not None and getattr(audio, "info", None) is not None:
+            length = getattr(audio.info, "length", 0.0) or 0.0
+            if length > 0:
+                return length * 1000
+    except Exception:
+        pass
+
+    try:
+        file_size = Path(audio_path).stat().st_size
+    except OSError:
+        return 1000.0
+
+    # Rough fallback for ~128kbps MP3-equivalent audio.
+    return max(1000.0, (file_size * 8 / 128000) * 1000)
+
+
+class OpenAITTSEngine(TTSEngine):
+    """OpenAI gpt-4o-mini-tts engine."""
+
+    def __init__(self, api_key: str | None = None):
+        self.api_key = api_key or OPENAI_API_KEY
+        if not self.api_key:
+            raise TTSError("OPENAI_API_KEY not configured")
+        self.client = AsyncOpenAI(api_key=self.api_key)
+
+    async def synthesize(
+        self,
+        text: str,
+        voice: str = "nova",
+        rate: float = 1.0,
+        volume: float = 1.0,
+        output_dir: str | Path | None = None,
+    ) -> TTSResult:
+        logger.info(
+            "OpenAI TTS: synthesizing {} chars, voice={}, rate={}",
+            len(text), voice, rate,
+        )
+
+        try:
+            response = await self.client.audio.speech.create(
+                model="gpt-4o-mini-tts",
+                voice=voice,
+                input=text,
+                speed=rate,
+                response_format="mp3",
+            )
+            audio_bytes = response.content
+            if not audio_bytes or len(audio_bytes) < 100:
+                raise TTSError("OpenAI TTS returned empty or too-small audio")
+
+            if output_dir:
+                out_dir = Path(output_dir)
+                out_dir.mkdir(parents=True, exist_ok=True)
+                audio_path = out_dir / "full.mp3"
+            else:
+                tmp = tempfile.NamedTemporaryFile(suffix=".mp3", delete=False)
+                audio_path = Path(tmp.name)
+                tmp.close()
+
+            audio_path.write_bytes(audio_bytes)
+            duration_ms = _get_audio_duration_ms(str(audio_path))
+
+            return TTSResult(
+                audio_bytes=audio_bytes,
+                audio_path=str(audio_path),
+                duration_ms=duration_ms,
+            )
+        except Exception as e:
+            if "TTSError" in type(e).__name__:
+                raise
+            raise TTSError(f"OpenAI TTS failed: {e}") from e
+
+
+class EdgeTTSEngine(TTSEngine):
+    """Edge-TTS engine."""
+
+    async def synthesize(
+        self,
+        text: str,
+        voice: str = "vi-VN-HoaiMyNeural",
+        rate: float = 1.0,
+        volume: float = 1.0,
+        output_dir: str | Path | None = None,
+    ) -> TTSResult:
+        import edge_tts
+
+        logger.info(
+            "Edge TTS: synthesizing {} chars, voice={}, rate={}",
+            len(text), voice, rate,
+        )
+
+        rate_pct = int((rate - 1.0) * 100)
+        rate_str = f"+{rate_pct}%" if rate_pct >= 0 else f"{rate_pct}%"
+
+        try:
+            communicate = edge_tts.Communicate(text, voice, rate=rate_str)
+            audio_chunks = []
+            async for chunk in communicate.stream():
+                if chunk["type"] == "audio":
+                    audio_chunks.append(chunk["data"])
+
+            audio_bytes = b"".join(audio_chunks)
+            if not audio_bytes or len(audio_bytes) < 100:
+                raise TTSError("Edge TTS returned empty audio")
+
+            if output_dir:
+                out_dir = Path(output_dir)
+                out_dir.mkdir(parents=True, exist_ok=True)
+                audio_path = out_dir / "full.mp3"
+            else:
+                tmp = tempfile.NamedTemporaryFile(suffix=".mp3", delete=False)
+                audio_path = Path(tmp.name)
+                tmp.close()
+
+            audio_path.write_bytes(audio_bytes)
+            duration_ms = _get_audio_duration_ms(str(audio_path))
+
+            return TTSResult(
+                audio_bytes=audio_bytes,
+                audio_path=str(audio_path),
+                duration_ms=duration_ms,
+            )
+        except Exception as e:
+            if "TTSError" in type(e).__name__:
+                raise
+            raise TTSError(f"Edge TTS failed: {e}") from e
 
 
 # ── ElevenLabs TTS Engine ──
@@ -579,11 +578,8 @@ class GeminiTTSEngine(TTSEngine):
                 wf.setframerate(24000)
                 wf.writeframes(pcm_data)
 
-            # Convert WAV → MP3 via pydub
-            from pydub import AudioSegment
-
-            audio_segment = AudioSegment.from_wav(str(wav_path))
-            audio_segment.export(str(mp3_path), format="mp3", bitrate="128k")
+            # Convert WAV -> MP3 via ffmpeg for Python 3.13+ compatibility
+            _convert_audio_to_mp3_ffmpeg(wav_path, mp3_path)
 
             # Clean up WAV
             wav_path.unlink(missing_ok=True)
@@ -617,192 +613,6 @@ class GeminiTTSEngine(TTSEngine):
             raise TTSError(f"Gemini TTS failed: {e}") from e
 
 
-# ── Vbee TTS Engine ──
-
-
-class VbeeTTSEngine(TTSEngine):
-    """Vbee AIVoice TTS — best Vietnamese voice quality, lowest cost.
-
-    Cost: ~181 VND per video (Tiêu chuẩn plan, 39K/month for 250K chars).
-    Quality: Best Vietnamese pronunciation with regional accents (Bắc/Trung/Nam).
-    Note: No native word timestamps → requires Whisper alignment.
-    API: Callback-based → we use polling via Get Request endpoint.
-    """
-
-    API_BASE = "https://vbee.vn/api/v1/tts"
-    DEFAULT_VOICE = "n_hanoi_male_nhabaohoangnam_news_vc"
-    VOICES = {
-        "phong_vien_nam": "n_hanoi_male_nhabaohoangnam_news_vc",
-        "tuan_anh_news": "n_hanoi_male_tuananhnews_news_vc",
-        "bao_trung_mc": "n_hanoi_male_baotrungmc_news_vc",
-        "mr_cu": "n_hanoi_male_sizonguyen_education_vc",
-    }
-    POLL_INTERVAL = 1.5  # seconds between polls
-    POLL_TIMEOUT = 30    # max wait seconds
-
-    def __init__(self, app_id: str | None = None, api_token: str | None = None):
-        self.app_id = app_id or VBEE_APP_ID
-        self.api_token = api_token or VBEE_API_TOKEN
-        if not self.app_id or not self.api_token:
-            raise TTSError(
-                "VBEE_APP_ID and VBEE_API_TOKEN not configured. "
-                "Get credentials at https://vbee.vn"
-            )
-
-    async def synthesize(
-        self,
-        text: str,
-        voice: str = "n_hanoi_male_nhabaohoangnam_news_vc",
-        rate: float = 1.0,
-        volume: float = 1.0,
-        output_dir: str | Path | None = None,
-    ) -> TTSResult:
-        """Synthesize text using Vbee AIVoice API.
-
-        Uses callback-based API with polling: POST → poll GET until SUCCESS
-        → download audio from audio_link.
-
-        Args:
-            text: Text to synthesize.
-            voice: Vbee voice code (e.g. n_hanoi_male_nhabaohoangnam_news_vc).
-            rate: Speech rate (min 0.1, default 1.0).
-            volume: Volume (not supported by Vbee API, ignored).
-            output_dir: Directory to save the MP3 file.
-
-        Returns:
-            TTSResult with MP3 audio. No word_boundaries (Whisper will handle).
-
-        Raises:
-            TTSError: If API call or polling fails.
-        """
-        import asyncio
-
-        import httpx
-
-        # Resolve voice alias → full code
-        voice = self.VOICES.get(voice, voice)
-
-        logger.info(
-            "Vbee TTS: synthesizing {} chars, voice={}, speed={}",
-            len(text), voice, rate,
-        )
-
-        headers = {"Authorization": f"Bearer {self.api_token}"}
-
-        try:
-            # ── Step 1: Create speech request ──
-            async with httpx.AsyncClient(timeout=15) as client:
-                resp = await client.post(
-                    self.API_BASE,
-                    json={
-                        "app_id": self.app_id,
-                        "input_text": text,
-                        "voice_code": voice,
-                        "speed_rate": max(0.1, rate),
-                        "audio_type": "mp3",
-                        "bitrate": 128,
-                        "response_type": "indirect",
-                        "callback_url": "https://example.com/noop",
-                    },
-                    headers=headers,
-                )
-                resp.raise_for_status()
-                create_data = resp.json()
-
-            request_id = create_data.get("request_id")
-            if not request_id:
-                raise TTSError(
-                    f"Vbee TTS: no request_id in response: {create_data}"
-                )
-
-            logger.debug("Vbee TTS: request_id={}, polling...", request_id)
-
-            # ── Step 2: Poll for completion ──
-            audio_link = None
-            polls = int(self.POLL_TIMEOUT / self.POLL_INTERVAL)
-
-            for attempt in range(polls):
-                await asyncio.sleep(self.POLL_INTERVAL)
-
-                async with httpx.AsyncClient(timeout=10) as client:
-                    poll_resp = await client.get(
-                        f"{self.API_BASE}/{request_id}",
-                        headers=headers,
-                    )
-                    poll_data = poll_resp.json()
-
-                # Response: {"status": 1, "result": {"status": "SUCCESS", ...}}
-                result = poll_data.get("result", {})
-                req_status = result.get("status", "")
-                progress = result.get("progress", "?")
-
-                if req_status == "SUCCESS":
-                    audio_link = result.get("audio_link")
-                    logger.debug(
-                        "Vbee TTS: SUCCESS after {} polls, audio_link={}",
-                        attempt + 1, audio_link,
-                    )
-                    break
-                elif req_status == "FAILED":
-                    raise TTSError(
-                        f"Vbee TTS request failed: {poll_data}"
-                    )
-                else:
-                    logger.debug(
-                        "Vbee TTS: poll {}/{}, status={}, progress={}",
-                        attempt + 1, polls, req_status, progress,
-                    )
-
-            if not audio_link:
-                raise TTSError(
-                    f"Vbee TTS timed out after {self.POLL_TIMEOUT}s "
-                    f"(request_id={request_id})"
-                )
-
-            # ── Step 3: Download audio ──
-            async with httpx.AsyncClient(timeout=30) as client:
-                audio_resp = await client.get(audio_link)
-                audio_resp.raise_for_status()
-                audio_bytes = audio_resp.content
-
-            if not audio_bytes or len(audio_bytes) < 100:
-                raise TTSError("Vbee TTS returned empty or too-small audio")
-
-            # ── Step 4: Save to file ──
-            if output_dir:
-                out_dir = Path(output_dir)
-                out_dir.mkdir(parents=True, exist_ok=True)
-                audio_path = out_dir / "full.mp3"
-            else:
-                tmp = tempfile.NamedTemporaryFile(
-                    suffix=".mp3", delete=False
-                )
-                audio_path = Path(tmp.name)
-                tmp.close()
-
-            audio_path.write_bytes(audio_bytes)
-
-            # Accurate duration via mutagen
-            duration_ms = _get_audio_duration_ms(str(audio_path))
-
-            logger.info(
-                "Vbee TTS complete: {} bytes, {:.0f}ms, saved to {}",
-                len(audio_bytes), duration_ms, audio_path,
-            )
-
-            return TTSResult(
-                audio_bytes=audio_bytes,
-                audio_path=str(audio_path),
-                duration_ms=duration_ms,
-                # No word_boundaries → Whisper will handle
-            )
-
-        except Exception as e:
-            if "TTSError" in type(e).__name__:
-                raise
-            raise TTSError(f"Vbee TTS failed: {e}") from e
-
-
 # ── Engine Factory ──
 
 
@@ -813,7 +623,7 @@ def get_tts_engine(engine_name: str = "openai", **kwargs) -> TTSEngine:
     """Factory function to get a TTS engine by name.
 
     Args:
-        engine_name: "openai", "edge-tts", "elevenlabs", "gemini", or "vbee".
+        engine_name: "openai", "edge-tts", "elevenlabs", or "gemini".
         **kwargs: Engine-specific options (e.g. elevenlabs_model, gemini_model).
 
     Returns:
@@ -843,12 +653,10 @@ def get_tts_engine(engine_name: str = "openai", **kwargs) -> TTSEngine:
     elif engine_name == "gemini":
         model = kwargs.get("gemini_model", GeminiTTSEngine.DEFAULT_MODEL)
         engine = GeminiTTSEngine(model=model)
-    elif engine_name == "vbee":
-        engine = VbeeTTSEngine()
     else:
         raise ValueError(
             f"Unknown TTS engine: {engine_name}. "
-            "Use 'openai', 'edge-tts', 'elevenlabs', 'gemini', or 'vbee'."
+            "Use 'openai', 'edge-tts', 'elevenlabs', or 'gemini'."
         )
 
     _tts_engine_cache[cache_key] = engine

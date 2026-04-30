@@ -26,7 +26,7 @@ import httpx
 from loguru import logger
 from openai import AsyncOpenAI
 
-from config import OPENAI_API_KEY, GOOGLE_API_KEY
+from config import OPENAI_API_KEY, GOOGLE_API_KEY, QWEN_API_KEY, CONTENT_PARSER_PROVIDER, CONTENT_PARSER_MODEL
 from app.nodes.agents.director import (
     DIRECTOR_PROMPT,
     DIRECTOR_SCHEMA,
@@ -604,16 +604,18 @@ async def _run_llm_phase(
     schema_name: str,
     temperature: float,
 ) -> dict[str, Any]:
-    """Run a single LLM phase with fallback (OpenAI → Gemini)."""
+    """Run a single LLM phase with fallback (primary → Gemini)."""
     try:
+        if CONTENT_PARSER_PROVIDER == "qwen":
+            return await _call_qwen(system_prompt, user_content, schema, schema_name, temperature)
         return await _call_openai(system_prompt, user_content, schema, schema_name, temperature)
     except Exception as e:
-        logger.warning("OpenAI {} failed: {}. Trying Gemini fallback...", schema_name, e)
+        logger.warning("{} {} failed: {}. Trying Gemini fallback...", CONTENT_PARSER_PROVIDER, schema_name, e)
         try:
             return await _call_gemini(system_prompt, user_content, schema, temperature)
         except Exception as fallback_error:
             raise ContentParserError(
-                f"All LLMs failed for {schema_name}. OpenAI: {e} | Gemini: {fallback_error}"
+                f"All LLMs failed for {schema_name}. Primary: {e} | Gemini: {fallback_error}"
             ) from fallback_error
 
 
@@ -652,6 +654,48 @@ async def _call_openai(
     content = response.choices[0].message.content
     if not content:
         raise ContentParserError(f"Empty response from GPT-4o-mini ({schema_name})")
+
+    return json.loads(content)
+
+
+async def _call_qwen(
+    system_prompt: str,
+    user_content: str,
+    schema: dict,
+    schema_name: str,
+    temperature: float,
+) -> dict[str, Any]:
+    """Call Qwen3.5-Flash (DashScope) with JSON output.
+
+    DashScope does not support strict json_schema mode, so the schema is
+    inlined into the system prompt and response_format=json_object is used.
+    """
+    if not QWEN_API_KEY:
+        raise ContentParserError("QWEN_API_KEY not configured")
+
+    from app.nodes._openai_client import get_qwen_client
+    client = get_qwen_client()
+
+    schema_hint = json.dumps(schema, ensure_ascii=False, indent=2)
+    augmented_system = (
+        f"{system_prompt}\n\n"
+        f"You MUST respond with valid JSON strictly matching this schema:\n{schema_hint}"
+    )
+
+    response = await client.chat.completions.create(
+        model=CONTENT_PARSER_MODEL,
+        messages=[
+            {"role": "system", "content": augmented_system},
+            {"role": "user", "content": user_content},
+        ],
+        response_format={"type": "json_object"},
+        temperature=temperature,
+        max_tokens=4096,
+    )
+
+    content = response.choices[0].message.content
+    if not content:
+        raise ContentParserError(f"Empty response from Qwen ({schema_name})")
 
     return json.loads(content)
 

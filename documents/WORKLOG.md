@@ -291,6 +291,30 @@ flag_modified(job, "props")  # belt-and-suspenders
 
 ---
 
+### [ADR-16] DashScope Rerank API — Dùng httpx thay openai SDK — 29/04/2026
+
+**Bối cảnh:** `media_reranker.py` gọi `_score_scene_with_qwen()` qua `openai.chat.completions.create()` với base_url trỏ DashScope. Endpoint `/reranks` không phải chat endpoint → trả 404. Cần gọi đúng DashScope Rerank API.
+
+**Các lựa chọn đã xem xét:**
+- **Option A:** Dùng DashScope Python SDK (`dashscope.TextReRank`). Thêm dependency, SDK chưa có async native.
+- **Option B:** Dùng `httpx.AsyncClient` POST trực tiếp tới `/compatible-api/v1/reranks`. Không cần dependency mới, async native, full control payload.
+
+**Quyết định:** Option B — httpx trực tiếp.
+- Endpoint: `POST https://dashscope-intl.aliyuncs.com/compatible-api/v1/reranks`
+- Model: `qwen3-rerank` (text-only, Singapore region)
+- Documents: list plain strings (văn bản metadata của media candidate)
+- Query: plain string mô tả scene
+- Auth: `Authorization: Bearer $QWEN_API_KEY`
+- Config var mới: `QWEN_RERANK_URL` trong `config.py`
+
+**Bug phát hiện kèm theo:** Response trả về `results` ở top-level (không phải `output.results` như tài liệu cũ mô tả). Fix: dual-path parser `data.get("results") or data.get("output", {}).get("results", [])`.
+
+**Hệ quả:** `QWEN_API_KEY` và `QWEN_BASE_URL` giữ nguyên (dùng chung với content parser). `QWEN_RERANK_URL` là biến mới độc lập, dễ override khi endpoint thay đổi.
+
+---
+
+---
+
 ### Sprint 4 — 28/04 → 04/05/2026
 
 | Task | Người làm | Deadline | Trạng thái |
@@ -298,6 +322,8 @@ flag_modified(job, "props")  # belt-and-suspenders
 | Director Simplification + Auto-Layout | Duy + AI | 27/04 | ✅ Xong |
 | Subtitle Text Fidelity Fix (original text display) | Duy + AI | 28/04 | ✅ Xong |
 | Round 2 Bug Fixes (layout stale, scene overflow, collapsed timestamps) | Duy + AI | 28/04 | ✅ Xong |
+| DashScope Rerank API Migration (httpx, qwen3-rerank) | Duy + AI | 29/04 | ✅ Xong |
+| Qwen TTS Removal (clean codebase) | Duy + AI | 29/04 | ✅ Xong |
 | Production Testing E2E (all TTS engines + scene types) | Duy + AI | 30/04 | ⏳ Next |
 | Dockerize & Railway Deployment | Duy + AI | 04/05 | ⏳ Chờ |
 

@@ -130,6 +130,13 @@ Y nghia:
 
 Trong demo flow, rerank chay tu dong truoc khi review.
 
+**Reranker (Apr 29 update)**:
+- Model: `qwen3-rerank` (text-only, DashScope Singapore)
+- API: `POST https://dashscope-intl.aliyuncs.com/compatible-api/v1/reranks` (httpx, khong qua openai SDK)
+- Documents: list plain strings (metadata van ban cua media candidate)
+- Response: `results` o top-level (khong phai `output.results`)
+- Config var: `QWEN_RERANK_URL` (co the override qua .env)
+
 ### 4.5. Scene Timing
 - Dung `word_timestamps`
 - Dung `processed_word_counts` theo tung scene

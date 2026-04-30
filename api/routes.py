@@ -186,12 +186,21 @@ async def create_job(
 ):
     job_id = uuid.uuid4().hex[:12]
 
+    settings_dict = body.settings.model_dump() if body.settings else {}
+    if body.skip_review is not None:
+        settings_dict["skip_review"] = body.skip_review
+    logger.info(
+        "Create job request: top_level_skip_review={} normalized_skip_review={}",
+        body.skip_review,
+        settings_dict.get("skip_review", False),
+    )
+
     job = Job(
         id=job_id,
         user_id=user.id,
         status="pending",
         input_text=body.input_text,
-        settings=body.settings.model_dump() if body.settings else {},
+        settings=settings_dict,
     )
     db.add(job)
     await db.flush()  # Populate job fields
@@ -202,7 +211,7 @@ async def create_job(
         _run_pipeline_background,
         job_id=job_id,
         text=body.input_text,
-        settings=body.settings,
+        settings=settings_dict,
     )
 
     return JobResponse.model_validate(job)
@@ -603,7 +612,7 @@ async def _run_pipeline_background(
                 message="AI is generating your video content...",
             ))
 
-            # ── Run pipeline — STOP before render ──
+            # ── Run pipeline (fast-track or review) ──
             from app.orchestrator import run_pipeline
 
             voice = "nova"
@@ -614,34 +623,71 @@ async def _run_pipeline_background(
                 voice = settings_dict.get("voice", "nova")
                 rate = settings_dict.get("speech_rate", 1.0)
 
-            await run_pipeline(
-                text=text,
-                job_id=job_id,
-                voice=voice,
-                rate=rate,
-                skip_render=True,  # ← KEY CHANGE: stop before render
-                user_settings=settings_dict,  # ← Pass ALL settings to pipeline
+            # ── Determine fast-track or normal review path ──
+            skip_review_flag = settings_dict.get("skip_review", False)
+            logger.info(
+                "Pipeline mode: skip_review={} (fast-track reranker={})",
+                skip_review_flag,
+                skip_review_flag,
             )
 
-            # Read generated props
-            props_file = Path(OUTPUT_DIR) / job_id / "video_props.json"
-            props_data = json.loads(props_file.read_text(encoding="utf-8"))
+            if skip_review_flag:
+                # ── Fast-track: rerank + render directly, skip review ──
+                await run_pipeline(
+                    text=text,
+                    job_id=job_id,
+                    voice=voice,
+                    rate=rate,
+                    skip_render=False,
+                    user_settings=settings_dict,
+                    use_reranker=True,
+                )
 
-            # Save to DB as review
-            job = (await db.execute(select(Job).where(Job.id == job_id))).scalar_one()
-            job.props = props_data
-            job.status = "review"  # ← NOT "done" — user reviews first
-            await db.commit()
+                props_file = Path(OUTPUT_DIR) / job_id / "video_props.json"
+                props_data = json.loads(props_file.read_text(encoding="utf-8"))
 
-            # Emit review_ready with props
-            await broadcast_progress(job_id, ProgressEvent(
-                event="review_ready",
-                progress=1.0,
-                message="Ready for review",
-                props=props_data,
-                job_id=job_id,
-            ))
+                video_url = f"/api/jobs/{job_id}/download"
 
+                job = (await db.execute(select(Job).where(Job.id == job_id))).scalar_one()
+                job.props = props_data
+                job.status = "done"
+                job.video_url = video_url
+                job.completed_at = datetime.now(timezone.utc)
+                await db.commit()
+
+                await broadcast_progress(job_id, ProgressEvent(
+                    event="done",
+                    job_id=job_id,
+                    download_url=video_url,
+                    progress=1.0,
+                    message="Video ready!",
+                ))
+            else:
+                # ── Normal: stop at review ──
+                await run_pipeline(
+                    text=text,
+                    job_id=job_id,
+                    voice=voice,
+                    rate=rate,
+                    skip_render=True,
+                    user_settings=settings_dict,
+                )
+
+                props_file = Path(OUTPUT_DIR) / job_id / "video_props.json"
+                props_data = json.loads(props_file.read_text(encoding="utf-8"))
+
+                job = (await db.execute(select(Job).where(Job.id == job_id))).scalar_one()
+                job.props = props_data
+                job.status = "review"
+                await db.commit()
+
+                await broadcast_progress(job_id, ProgressEvent(
+                    event="review_ready",
+                    progress=1.0,
+                    message="Ready for review",
+                    props=props_data,
+                    job_id=job_id,
+                ))
         except Exception as e:
             logger.exception(f"Pipeline failed for job {job_id}")
             job = (await db.execute(select(Job).where(Job.id == job_id))).scalar_one()

@@ -7,6 +7,7 @@ edge-tts>=7.0
 # LLM Fallback
 langchain-google-genai
 google-genai
+dashscope>=1.24.6
 
 # API + Auth
 fastapi
@@ -26,11 +27,11 @@ alembic
 redis>=5.0
 
 # Audio
-pydub
 aiofiles
 stable-ts>=2.0
 mutagen
 elevenlabs
+imageio-ffmpeg>=0.6.0
 
 # Utils
 loguru

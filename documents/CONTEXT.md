@@ -1,8 +1,8 @@
 # 🎬 AutoClip AI — Session Context
 
-> **Last updated**: 2026-04-26  
+> **Last updated**: 2026-04-29  
 > **Branch**: `UIUX`  
-> **Status**: E2E pipeline stabilized. **4 TTS engines** integrated (OpenAI, ElevenLabs, Gemini, Edge-TTS). Native word timestamps (ElevenLabs) + smart Whisper skip. Accurate audio duration via mutagen. Custom media upload (drag-drop). Render sync fixed. Production-ready.
+> **Status**: E2E pipeline stabilized. **4 TTS engines** integrated (OpenAI, ElevenLabs, Gemini, Edge-TTS). Native word timestamps (ElevenLabs) + smart Whisper skip. Accurate audio duration via mutagen. Custom media upload (drag-drop). Render sync fixed. DashScope Rerank API integrated (qwen3-rerank). Qwen TTS removed. Production-ready.
 > **Paste this file at the start of a new session to resume work.**
 
 ---
@@ -276,3 +276,25 @@ cmd /c "npx remotion studio"
 - **Subtitle text fidelity** — Whisper alignment dùng `full_narration` (original) thay vì `processed_full`, kèm `original_word_counts` cho scene timing
 - **Collapsed timestamp recovery** — `_fix_collapsed_timestamps()` 2-phase detect+redistribute cho words Whisper fail align (<10ms)
 - **Adaptive font-size** — `StockBackground.tsx` scale font down cho narration dài (>200 chars → 38px), safety net cho LLM word limit rule
+- **DashScope Rerank API (httpx)** — `media_reranker.py` dùng `httpx.AsyncClient` POST trực tiếp tới `/compatible-api/v1/reranks`, không qua openai SDK. Model `qwen3-rerank`, documents là plain strings.
+- **qwen3-rerank response shape** — top-level `results` array (không phải `output.results`). Dual-path parser để tương thích cả hai format.
+- **Qwen TTS removed** — `QwenTTSEngine` xoá hoàn toàn, chỉ còn 4 engines: OpenAI, ElevenLabs, Gemini, Edge-TTS. `QWEN_TTS_BASE_URL` bỏ khỏi config.
+
+### DashScope Rerank API Migration (Apr 29)
+- **`media_reranker.py`**: Chuyển `_score_scene_with_qwen()` từ `openai.chat.completions` → httpx POST trực tiếp tới DashScope Rerank API endpoint `/compatible-api/v1/reranks`.
+- **Model**: `qwen3-rerank` (text-only, DashScope Singapore). Dùng documents là list plain strings (metadata văn bản), query là plain string.
+- **Response parsing**: Response trả về `results` ở top-level (không phải `output.results`). Parser dùng dual-path: `data.get("results") or data.get("output", {}).get("results", [])`.
+- **Config**: Thêm `QWEN_RERANK_URL` vào `config.py`, default `https://dashscope-intl.aliyuncs.com/compatible-api/v1/reranks`.
+- **`.env`**: `VLM_RERANK_MODEL=qwen3-rerank`, `VLM_RERANK_MAX_CANDIDATES=6`, `VLM_RERANK_MAX_CONCURRENCY=3`.
+
+### Qwen TTS Removal (Apr 29)
+- **Removed**: `QwenTTSEngine` class hoàn toàn khỏi `tts_synthesizer.py`.
+- **Removed**: `qwen` branch trong `get_tts_engine()` factory.
+- **Removed**: `QWEN_TTS_BASE_URL` khỏi `config.py` và import chain.
+- **Removed**: `urlparse` import (chỉ dùng bởi QwenTTSEngine).
+- **TTS engines còn lại**: OpenAI, ElevenLabs, Gemini, Edge-TTS (4 engines).
+- **Error message**: Cập nhật thông báo lỗi engine không hợp lệ: `"Use 'openai', 'edge-tts', 'elevenlabs', or 'gemini'."`.
+- **Root cause**: `QWEN_TTS_BASE_URL` bị thiếu trong config khi server restart → `ImportError` → giải pháp là xoá hẳn Qwen TTS thay vì thêm lại.
+
+### TypeScript Config (Apr 29)
+- **`web/tsconfig.app.json`**: Thêm `"ignoreDeprecations": "6.0"` để suppress deprecation warning `baseUrl` trong TypeScript 6.x.

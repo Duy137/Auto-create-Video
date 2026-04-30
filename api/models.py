@@ -68,6 +68,7 @@ class JobCreateRequest(BaseModel):
     """Request body for POST /api/jobs — submit a new video generation job."""
     input_text: str = Field(..., min_length=10)
     settings: JobSettings
+    skip_review: bool | None = None
 
 
 class JobSettings(BaseModel):
@@ -98,6 +99,8 @@ class JobSettings(BaseModel):
         pattern=r"^(top|center|bottom)$",
     )
     subtitle_highlight_color: str = Field(default="#FF6B35")
+    # Fast-track: skip review step and render directly (with VLM reranker)
+    skip_review: bool = False
 
 
 class JobResponse(BaseModel):

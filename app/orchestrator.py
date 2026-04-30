@@ -48,6 +48,7 @@ from app.nodes.media_searcher import (
     search_media,
 )
 from app.nodes.video_renderer import render_video
+from app.nodes.media_reranker import rerank_candidates_by_scene
 
 
 # ══════════════════════════════════════════
@@ -497,7 +498,6 @@ async def stage_assets_for_remotion(
     from urllib.parse import urlparse, unquote
 
     logger.info("━━━ Staging Assets for Remotion ━━━")
-
     remotion_assets_dir = Path(REMOTION_DIR) / "public" / "assets" / job_id
     remotion_assets_dir.mkdir(parents=True, exist_ok=True)
 
@@ -676,6 +676,7 @@ async def run_pipeline(
     rate: float = 1.0,
     skip_render: bool = False,
     user_settings: dict | None = None,
+    use_reranker: bool = False,
 ) -> Path:
     """Run the full AutoClip pipeline.
 
@@ -686,6 +687,8 @@ async def run_pipeline(
         rate: Speech rate.
         skip_render: If True, skip Remotion render (for testing).
         user_settings: User-provided settings dict from frontend (JobSettings).
+        use_reranker: If True, collect multiple media candidates and VLM-rerank
+            before timing/render stages.
 
     Returns:
         Path to the final video file (or video_props.json if skip_render).
@@ -727,6 +730,21 @@ async def run_pipeline(
                   engine_name=tts_engine_name, **engine_kwargs),
         _step_media_search(parsed["scenes"], job_dir),
     )
+
+    # ── Step 2C: VLM Rerank (optional) ──
+    if use_reranker:
+        logger.info("━━━ Step 2C: VLM Rerank ━━━")
+        candidates_by_scene = await collect_scene_media_candidates(
+            parsed["scenes"],
+            max_candidates=5,
+        )
+        scenes_with_media, _ = await rerank_candidates_by_scene(
+            scenes_with_media,
+            candidates_by_scene,
+        )
+        logger.info("  VLM rerank complete")
+    else:
+        logger.info("━━━ Step 2C: VLM Rerank skipped (use_reranker=False) ━━━")
 
     # ── Step 3: Compute scene timing from audio duration ──
     logger.info("━━━ Step 3: Scene Timing ━━━")

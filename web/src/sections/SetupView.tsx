@@ -156,9 +156,9 @@ export default function SetupView({ onJobCreated, initialSettings }: SetupViewPr
     try {
       const data = await api.post('/jobs', {
         input_text: text,
-        skip_review: skipReview,
         settings: {
           ...settings,
+          skip_review: skipReview,
           // Override voice with effective voice (custom ElevenLabs ID if set)
           voice: effectiveVoice,
         },

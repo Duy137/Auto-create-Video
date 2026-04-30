@@ -17,8 +17,13 @@ OPENAI_API_KEY: str = os.getenv("OPENAI_API_KEY", "")
 PEXELS_API_KEY: str = os.getenv("PEXELS_API_KEY", "")
 GOOGLE_API_KEY: str = os.getenv("GOOGLE_API_KEY", "")  # Gemini LLM + TTS
 ELEVENLABS_API_KEY: str = os.getenv("ELEVENLABS_API_KEY", "")  # Premium TTS
-VBEE_APP_ID: str = os.getenv("VBEE_APP_ID", "")  # Vbee Vietnamese TTS
-VBEE_API_TOKEN: str = os.getenv("VBEE_API_TOKEN", "")  # Vbee API JWT token
+QWEN_API_KEY: str = os.getenv("QWEN_API_KEY", "")  # DashScope / Qwen
+QWEN_BASE_URL: str = os.getenv("QWEN_BASE_URL", "https://dashscope.aliyuncs.com/compatible-mode/v1")
+# Rerank models use a separate endpoint (not chat/completions)
+QWEN_RERANK_URL: str = os.getenv(
+    "QWEN_RERANK_URL",
+    "https://dashscope-intl.aliyuncs.com/compatible-api/v1/reranks",
+)
 
 # ── Auth ──
 JWT_SECRET_KEY: str = os.getenv("JWT_SECRET_KEY", "dev-secret-change-me")
@@ -54,9 +59,12 @@ if JOB_STORE_BACKEND not in {"auto", "redis", "file"}:
     JOB_STORE_BACKEND = "auto"
 
 # ── TTS ──
-DEFAULT_TTS_ENGINE: str = os.getenv("DEFAULT_TTS_ENGINE", "openai")
-# Options: "openai" | "edge-tts" | "elevenlabs" | "gemini" | "vbee"
+DEFAULT_TTS_ENGINE: str = os.getenv("DEFAULT_TTS_ENGINE", "openai")  # "openai" | "edge-tts"
 DEFAULT_VOICE: str = os.getenv("DEFAULT_VOICE", "nova")
+
+# ── Content Parser LLM ──
+CONTENT_PARSER_PROVIDER: str = os.getenv("CONTENT_PARSER_PROVIDER", "openai").strip().lower()
+CONTENT_PARSER_MODEL: str = os.getenv("CONTENT_PARSER_MODEL", "gpt-4o-mini").strip()
 
 # ── VLM Media Reranker ──
 VLM_RERANK_ENABLED: bool = os.getenv("VLM_RERANK_ENABLED", "true").strip().lower() in {

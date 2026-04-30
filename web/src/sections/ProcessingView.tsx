@@ -1,22 +1,24 @@
 import { useEffect, useState, useRef } from 'react'
 import { connectSSE, SSEEvent } from '@/api/sse'
 import { api } from '@/api/client'
-import { LoaderCircle, CircleCheck, CircleAlert, Terminal, ArrowLeft } from 'lucide-react'
+import { LoaderCircle, CircleCheck, CircleAlert, Terminal, ArrowLeft, Circle } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Progress } from "@/components/ui/progress"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Button } from "@/components/ui/button"
+import { cn } from "@/lib/utils"
 
 // Backend emits coarse-grained SSE events:
 // Phase 1: step="processing" (0.10) → event="review_ready"
 // Phase 2: step="staging" (0.20) → step="render" (0.60) → event="done"
 
-const STEP_LABELS: Record<string, string> = {
-  processing: 'AI đang phân tích và tạo nội dung...',
-  staging: 'Chuẩn bị tài nguyên cho render...',
-  render: 'Đang kết xuất video...',
-}
+const PHASE1_STEPS = [
+  { key: 'processing', label: 'Phân tích & Tạo nội dung', sub: 'AI chia cảnh · Tổng hợp TTS · Tìm kiếm media' },
+]
+const PHASE2_STEPS = [
+  { key: 'staging', label: 'Chuẩn bị tài nguyên', sub: 'Sao chép file vào thư mục render' },
+  { key: 'render',  label: 'Kết xuất video',       sub: 'Remotion render từng frame → MP4' },
+]
 
 interface ProcessingViewProps {
   jobId: string | null
@@ -32,6 +34,8 @@ export default function ProcessingView({ jobId, onReviewReady, onDone, onCancel 
   const [logs, setLogs] = useState<string[]>([])
   const [error, setError] = useState<string | null>(null)
   const sseRef = useRef<{ close: () => void } | null>(null)
+  const [doneSteps, setDoneSteps] = useState<Set<string>>(new Set())
+  const [phase, setPhase] = useState<1 | 2>(1)
 
   useEffect(() => {
     if (!jobId) return
@@ -52,12 +56,16 @@ export default function ProcessingView({ jobId, onReviewReady, onDone, onCancel 
             setCurrentStep(event.step || '')
             setMessage(event.message || 'Đang xử lý...')
             addLog(event.message || `Bước: ${event.step}`)
+            if (event.step === 'staging' || event.step === 'render') setPhase(2)
+            if (event.step === 'render') setDoneSteps(prev => new Set([...prev, 'staging']))
             break
 
           case 'review_ready':
             setProgress(1)
             setMessage('Đã sẵn sàng để kiểm tra!')
             addLog('✅ Hoàn tất giai đoạn 1 — Các cảnh quay đã sẵn sàng')
+            setDoneSteps(prev => new Set([...prev, 'processing']))
+            setCurrentStep('')
             if (event.props) {
               onReviewReady(event.props)
             } else {
@@ -71,6 +79,8 @@ export default function ProcessingView({ jobId, onReviewReady, onDone, onCancel 
             setProgress(1)
             setMessage('Video đã sẵn sàng!')
             addLog('✅ Quá trình tạo video đã hoàn tất!')
+            setDoneSteps(prev => new Set([...prev, 'render']))
+            setCurrentStep('')
             onDone(event.download_url || `/api/jobs/${jobId}/download`)
             break
 
@@ -133,32 +143,48 @@ export default function ProcessingView({ jobId, onReviewReady, onDone, onCancel 
       {/* Main Progress Card */}
       <Card className="border-primary/5 bg-card/40 backdrop-blur-md overflow-hidden relative">
         <div className="absolute top-0 left-0 w-full h-1 bg-muted">
-            <div 
-                className="h-full bg-primary transition-all duration-500 ease-out" 
-                style={{ width: `${progressPercent}%` }} 
-            />
+          <div
+            className="h-full bg-primary transition-all duration-700 ease-out"
+            style={{ width: `${progressPercent}%` }}
+          />
         </div>
-        
+
         <CardHeader>
-            <CardTitle className="text-sm font-medium flex items-center justify-between">
-                <span>Tiến độ thực hiện</span>
-                <span className="font-mono text-primary">{progressPercent}%</span>
-            </CardTitle>
+          <CardTitle className="text-sm font-medium flex items-center justify-between">
+            <span>Tiến độ thực hiện</span>
+            <span className="font-mono text-primary">{progressPercent}%</span>
+          </CardTitle>
         </CardHeader>
-        
-        <CardContent className="space-y-3">
-          {/* Current step indicator */}
-          {currentStep && (
-            <div className="flex items-center gap-3 p-3 rounded-lg bg-primary/5 font-medium border border-primary/10">
-              <LoaderCircle className="w-5 h-5 text-primary animate-spin flex-shrink-0" />
-              <span className="text-foreground">
-                {STEP_LABELS[currentStep] || currentStep.replace(/_/g, ' ')}
-              </span>
-            </div>
-          )}
-          
-          {/* Progress bar */}
-          <Progress value={progressPercent} className="h-2" />
+
+        <CardContent className="space-y-1">
+          {(phase === 1 ? PHASE1_STEPS : PHASE2_STEPS).map((step) => {
+            const status = doneSteps.has(step.key)
+              ? 'done'
+              : currentStep === step.key
+              ? 'active'
+              : 'pending'
+            return (
+              <div
+                key={step.key}
+                className={cn(
+                  'flex items-start gap-3 p-3 rounded-lg transition-all duration-300',
+                  status === 'active' && 'bg-primary/5 border border-primary/10',
+                  status === 'done' && 'opacity-50',
+                  status === 'pending' && 'opacity-25',
+                )}
+              >
+                <div className="mt-0.5 flex-shrink-0">
+                  {status === 'done' && <CircleCheck className="w-5 h-5 text-green-500" />}
+                  {status === 'active' && <LoaderCircle className="w-5 h-5 text-primary animate-spin" />}
+                  {status === 'pending' && <Circle className="w-5 h-5 text-muted-foreground" />}
+                </div>
+                <div>
+                  <p className="font-medium text-sm leading-tight">{step.label}</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">{step.sub}</p>
+                </div>
+              </div>
+            )
+          })}
         </CardContent>
       </Card>
 

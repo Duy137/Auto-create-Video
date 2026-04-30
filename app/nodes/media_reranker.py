@@ -15,6 +15,8 @@ from openai import AsyncOpenAI
 
 from config import (
     OPENAI_API_KEY,
+    QWEN_API_KEY,
+    QWEN_RERANK_URL,
     VLM_RERANK_ENABLED,
     VLM_RERANK_MAX_CANDIDATES,
     VLM_RERANK_MAX_CONCURRENCY,
@@ -222,6 +224,109 @@ async def _score_scene_with_openai(
     }
 
 
+async def _score_scene_with_qwen(
+    scene: dict[str, Any],
+    candidates: list[dict[str, Any]],
+    max_candidates: int,
+) -> dict[str, Any]:
+    """Score scene candidates using DashScope Rerank API (qwen3-rerank or qwen3-vl-rerank)."""
+    if not QWEN_API_KEY:
+        raise RuntimeError("QWEN_API_KEY is required for Qwen VLM reranking")
+
+    import httpx
+
+    considered = candidates[: max(1, max_candidates)]
+
+    # Build query text from scene context
+    parts = [
+        scene.get("narration", "")[:400],
+        scene.get("visual_description", ""),
+        scene.get("semantic_summary_en", ""),
+        scene.get("semantic_image_query") or scene.get("image_query") or "",
+        scene.get("semantic_video_query") or scene.get("video_query") or "",
+    ]
+    query_text = " | ".join(p for p in parts if p)[:1000]
+
+    # qwen3-vl-rerank supports image/video docs; qwen3-rerank is text-only
+    _is_vl_model = "vl" in VLM_RERANK_MODEL.lower()
+
+    documents: list[Any] = []
+    for candidate in considered:
+        if _is_vl_model:
+            preview = _preview_url(candidate)
+            if preview:
+                documents.append({"image": preview})
+                continue
+        # text document: encode rich metadata so the ranker can score semantically
+        media_type = candidate.get("media_type", "unknown")
+        source_query = candidate.get("source_query") or candidate.get("image_query") or candidate.get("video_query") or ""
+        tags = " ".join(candidate.get("tags", []) or [])
+        meta = (
+            f"type:{media_type} query:{source_query} "
+            f"w:{candidate.get('width', '')} h:{candidate.get('height', '')} "
+            f"dur:{candidate.get('duration', '')} tags:{tags}"
+        ).strip()
+        if _is_vl_model:
+            documents.append({"text": meta})
+        else:
+            # qwen3-rerank expects plain string documents in compatible API mode.
+            documents.append(meta)
+
+    # qwen3-rerank expects query as a plain string; qwen3-vl-rerank accepts {"text": ...}
+    query_field: Any = {"text": query_text} if _is_vl_model else query_text
+
+    payload: dict[str, Any] = {
+        "model": VLM_RERANK_MODEL,
+        "query": query_field,
+        "documents": documents,
+        "top_n": len(documents),
+        "instruct": "Select the most visually relevant stock media for this short-video scene.",
+    }
+    if _is_vl_model:
+        payload["return_documents"] = False
+
+    headers = {
+        "Authorization": f"Bearer {QWEN_API_KEY}",
+        "Content-Type": "application/json",
+    }
+    timeout_seconds = max(5.0, VLM_RERANK_TIMEOUT_SECONDS)
+
+    async with httpx.AsyncClient(timeout=timeout_seconds) as http_client:
+        resp = await http_client.post(QWEN_RERANK_URL, headers=headers, json=payload)
+        try:
+            resp.raise_for_status()
+        except httpx.HTTPStatusError as e:
+            body = e.response.text[:800]
+            raise RuntimeError(f"DashScope rerank HTTP {e.response.status_code}: {body}") from e
+        data = resp.json()
+
+    results = data.get("results") or data.get("output", {}).get("results", []) or []
+    if not results:
+        body = json.dumps(data, ensure_ascii=False)[:800]
+        raise RuntimeError(f"Qwen Rerank API returned empty results: {body}")
+
+    # results are sorted by relevance_score descending; pick the top one
+    best = results[0]
+    selected_index = int(best.get("index", 0))
+    if selected_index < 0 or selected_index >= len(considered):
+        selected_index = 0
+
+    relevance_score = float(best.get("relevance_score", 0.0))
+    scores = [
+        {"index": r.get("index"), "score": r.get("relevance_score"), "note": ""}
+        for r in results
+    ]
+
+    return {
+        "selected_index": selected_index,
+        "selected_candidate": considered[selected_index],
+        "confidence": max(0.0, min(1.0, relevance_score)),
+        "reason": f"{VLM_RERANK_MODEL} score={relevance_score:.3f}",
+        "scores": scores,
+        "used_fallback": False,
+    }
+
+
 async def rerank_candidates_by_scene(
     scenes: list[dict[str, Any]],
     candidates_by_scene: dict[Any, list[dict[str, Any]]],
@@ -274,6 +379,25 @@ async def rerank_candidates_by_scene(
             except Exception as e:
                 logger.warning(
                     "VLM rerank failed for scene {}: {}. Falling back to top-1.",
+                    scene_index,
+                    e,
+                )
+        elif VLM_RERANK_ENABLED and VLM_RERANK_PROVIDER == "qwen":
+            try:
+                async with semaphore:
+                    scored = await _score_scene_with_qwen(
+                        scene_copy,
+                        candidates,
+                        max_candidates=max_candidates,
+                    )
+                selected_candidate = scored.get("selected_candidate") or selected_candidate
+                decision = {
+                    "scene_index": scene_index,
+                    **scored,
+                }
+            except Exception as e:
+                logger.warning(
+                    "Qwen VLM rerank failed for scene {}: {}. Falling back to top-1.",
                     scene_index,
                     e,
                 )
