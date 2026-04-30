@@ -755,7 +755,7 @@ class VbeeTTSEngine(TTSEngine):
                 )
 
             # ── Step 3: Download audio ──
-            async with httpx.AsyncClient(timeout=30) as client:
+            async with httpx.AsyncClient(timeout=30, follow_redirects=True) as client:
                 audio_resp = await client.get(audio_link)
                 audio_resp.raise_for_status()
                 audio_bytes = audio_resp.content
