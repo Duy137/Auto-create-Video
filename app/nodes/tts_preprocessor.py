@@ -128,16 +128,18 @@ def _apply_pronunciation_map(text: str) -> str:
         result = pattern.sub(pronunciation, result)
     return result
 
-
 def preprocess_for_tts(
     narration: str,
     custom_expansions: dict[str, str] | None = None,
+    engine_name: str = "",
 ) -> str:
     """Preprocess plain text for TTS. NO SSML wrapping.
 
     Args:
         narration: Raw narration text.
         custom_expansions: Optional dict of abbreviation → full form.
+        engine_name: TTS engine identifier. Vietnamese engines (vbee, edge-tts)
+            skip the pronunciation map to avoid dots being read as sentence breaks.
 
     Returns:
         Cleaned text optimized for TTS pronunciation.
@@ -150,8 +152,12 @@ def preprocess_for_tts(
     # Step 1: Expand custom abbreviations
     result = _expand_abbreviations(result, custom_expansions)
 
-    # Step 1.5: Apply pronunciation fixes for Vietnamese TTS
-    result = _apply_pronunciation_map(result)
+    # Step 1.5: Apply pronunciation fixes — SKIP for Vietnamese TTS engines
+    # Vietnamese engines (Vbee, edge-tts) interpret dots as sentence endings,
+    # causing unnatural pauses (e.g. "A.I." → "A" [pause] "I" [pause]).
+    _SKIP_PRONUNCIATION_ENGINES = {"vbee", "edge-tts"}
+    if engine_name.lower() not in _SKIP_PRONUNCIATION_ENGINES:
+        result = _apply_pronunciation_map(result)
 
     # Step 2: Convert numbers to Vietnamese words
     result = _convert_numbers_to_words(result)

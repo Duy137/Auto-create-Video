@@ -113,7 +113,7 @@ async def _step_tts(
     processed_word_counts: list[int] = []
     original_word_counts: list[int] = []
     for i, narration in enumerate(deduped_narrations):
-        processed = preprocess_for_tts(narration)
+        processed = preprocess_for_tts(narration, engine_name=engine_name)
         processed_narrations.append(processed)
         processed_word_counts.append(len(processed.split()))
         original_word_counts.append(len(narration.split()))
