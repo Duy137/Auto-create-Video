@@ -266,9 +266,19 @@ function ScenePreviewMockup({ scene, palette }: { scene: Scene; palette: Record<
     case 'news_intro':
       return (
         <div className="w-full h-full flex flex-col relative" style={{ background: '#0a1200' }}>
-          {/* Top half: media placeholder */}
-          <div className="flex-1 flex items-center justify-center bg-gradient-to-b from-zinc-800/60 to-transparent">
-            <ImageIcon className="w-8 h-8 text-white/20" />
+          {/* Top half: actual media or placeholder */}
+          <div className="flex-1 overflow-hidden">
+            {scene.media_url ? (
+              scene.media_type === 'video' ? (
+                <video src={scene.media_url} className="w-full h-full object-cover object-center" muted />
+              ) : (
+                <img src={scene.media_url} alt="" className="w-full h-full object-cover object-center" />
+              )
+            ) : (
+              <div className="w-full h-full flex items-center justify-center bg-gradient-to-b from-zinc-800/60 to-transparent">
+                <ImageIcon className="w-8 h-8 text-white/20" />
+              </div>
+            )}
           </div>
           {/* Bottom half: brand overlay mockup */}
           <div className="absolute bottom-0 left-0 right-0 h-[55%] bg-gradient-to-b from-transparent via-[#0a1200]/80 to-[#0a1200]/95 flex flex-col justify-center px-4 gap-2">
@@ -608,6 +618,45 @@ export default function ReviewView({
                         onError={() => { setMediaLoading(false); setMediaError(true) }}
                       />
                     )}
+                  </div>
+                ) : selectedScene?.scene_type === 'news_intro' ? (
+                  // [CryptoVN Custom] NewsIntro: media top 50%, brand overlay bottom 50%
+                  <div className="w-full h-full flex flex-col relative" style={{ background: '#0a1200' }}>
+                    {/* Top half: media with cover */}
+                    <div className="w-full h-1/2 overflow-hidden">
+                      {selectedScene.media_type === 'video' ? (
+                        <video
+                          key={getPreviewUrl(selectedScene)!}
+                          src={getPreviewUrl(selectedScene)!}
+                          autoPlay muted loop
+                          className="w-full h-full object-cover object-center"
+                          onLoadedData={() => setMediaLoading(false)}
+                          onError={() => { setMediaLoading(false); setMediaError(true) }}
+                        />
+                      ) : (
+                        <img
+                          key={getPreviewUrl(selectedScene)!}
+                          src={getPreviewUrl(selectedScene)!}
+                          alt=""
+                          className="w-full h-full object-cover object-center"
+                          onLoad={() => setMediaLoading(false)}
+                          onError={() => { setMediaLoading(false); setMediaError(true) }}
+                        />
+                      )}
+                    </div>
+                    {/* Gradient overlay + brand info */}
+                    <div className="absolute bottom-0 left-0 right-0 h-[55%] bg-gradient-to-b from-transparent via-[#0a1200]/80 to-[#0a1200]/95 flex flex-col justify-end px-5 pb-16 gap-2">
+                      <div className="w-12 h-[3px] rounded-full" style={{ backgroundColor: '#C6FD01' }} />
+                      <div className="flex items-center gap-2">
+                        <div className="w-8 h-8 rounded-md bg-[#C6FD01]/20 flex items-center justify-center">
+                          <span className="text-[9px] font-black" style={{ color: '#C6FD01' }}>CV</span>
+                        </div>
+                        <span className="text-base font-extrabold" style={{ color: '#C6FD01' }}>CryptoVN 101</span>
+                      </div>
+                      <p className="text-sm font-bold leading-tight line-clamp-3 uppercase" style={{ color: '#fff' }}>
+                        {selectedScene.narration?.slice(0, 100)}
+                      </p>
+                    </div>
                   </div>
                 ) : (
                   // Fullscreen layout (default for all other types)

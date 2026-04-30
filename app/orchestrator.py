@@ -200,7 +200,7 @@ async def _step_media_search(scenes: list[dict], job_dir: Path) -> list[dict]:
         # Only stock_background and media_showcase render external media.
         # Other types (title_card, info_card, stats_highlight, diagram,
         # emoji_grid, comparison, timeline) use gradient/animated backgrounds.
-        NEEDS_MEDIA = {"stock_background", "media_showcase"}
+        NEEDS_MEDIA = {"stock_background", "media_showcase", "news_intro"}  # [CryptoVN Custom] news_intro
         if scene_type not in NEEDS_MEDIA:
             scene["media_url"] = None
             scene["media_type"] = None

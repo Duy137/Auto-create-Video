@@ -118,8 +118,17 @@ export const NewsIntro: React.FC<NewsIntroProps> = ({
 
   return (
     <AbsoluteFill style={{ opacity: fadeIn * exitOpacity }}>
-      {/* Layer 1: Media background (top ~50%, full bleed) */}
-      <AbsoluteFill style={{ overflow: "hidden" }}>
+      {/* Layer 1: Media — constrained to top 50% only */}
+      <div
+        style={{
+          position: "absolute",
+          top: 0,
+          left: 0,
+          right: 0,
+          height: "50%",
+          overflow: "hidden",
+        }}
+      >
         {hasMedia ? (
           scene.mediaType === "video" ? (
             <OffthreadVideo
@@ -128,6 +137,7 @@ export const NewsIntro: React.FC<NewsIntroProps> = ({
                 width: "100%",
                 height: "100%",
                 objectFit: "cover",
+                objectPosition: "center",
               }}
               muted
             />
@@ -145,6 +155,7 @@ export const NewsIntro: React.FC<NewsIntroProps> = ({
                   width: "100%",
                   height: "100%",
                   objectFit: "cover",
+                  objectPosition: "center",
                   transform: `scale(${kenBurnsScale}) translateX(${kenBurnsPanX}px)`,
                 }}
               />
@@ -152,13 +163,15 @@ export const NewsIntro: React.FC<NewsIntroProps> = ({
           )
         ) : (
           /* Fallback gradient when no media */
-          <AbsoluteFill
+          <div
             style={{
+              width: "100%",
+              height: "100%",
               background: `linear-gradient(160deg, ${colorPalette.background} 0%, ${colorPalette.primary}22 50%, ${colorPalette.background} 100%)`,
             }}
           />
         )}
-      </AbsoluteFill>
+      </div>
 
       {/* Layer 2: Source badge — below TikTok search bar */}
       <div
