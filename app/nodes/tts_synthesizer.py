@@ -632,7 +632,7 @@ class VbeeTTSEngine(TTSEngine):
         "mr_cu": "n_hanoi_male_sizonguyen_education_vc",
     }
     POLL_INTERVAL = 1.5  # seconds between polls
-    POLL_TIMEOUT = 30    # max wait seconds
+    POLL_TIMEOUT = 60    # max wait seconds (long text needs more time)
 
     def __init__(self, app_id: str | None = None, api_token: str | None = None):
         self.app_id = app_id or VBEE_APP_ID
@@ -715,38 +715,61 @@ class VbeeTTSEngine(TTSEngine):
             # ── Step 2: Poll for completion ──
             audio_link = None
             polls = int(self.POLL_TIMEOUT / self.POLL_INTERVAL)
+            _TRANSIENT_ERRORS = (httpx.ConnectTimeout, httpx.ReadTimeout, httpx.ConnectError)
 
-            for attempt in range(polls):
-                await asyncio.sleep(self.POLL_INTERVAL)
+            async with httpx.AsyncClient(timeout=15) as poll_client:
+                for attempt in range(polls):
+                    await asyncio.sleep(self.POLL_INTERVAL)
 
-                async with httpx.AsyncClient(timeout=10) as client:
-                    poll_resp = await client.get(
-                        f"{self.API_BASE}/{request_id}",
-                        headers=headers,
-                    )
-                    poll_data = poll_resp.json()
+                    # Retry transient network errors (up to 2 retries per poll)
+                    poll_data = None
+                    for retry in range(3):
+                        try:
+                            poll_resp = await poll_client.get(
+                                f"{self.API_BASE}/{request_id}",
+                                headers=headers,
+                            )
+                            poll_data = poll_resp.json()
+                            break
+                        except _TRANSIENT_ERRORS as net_err:
+                            if retry < 2:
+                                logger.warning(
+                                    "Vbee TTS: poll {} network error (retry {}/2): {}",
+                                    attempt + 1, retry + 1, type(net_err).__name__,
+                                )
+                                await asyncio.sleep(2)
+                            else:
+                                logger.warning(
+                                    "Vbee TTS: poll {} failed after 3 retries: {}",
+                                    attempt + 1, net_err,
+                                )
+                                # Skip this poll attempt, try next
+                                continue
 
-                # Response: {"status": 1, "result": {"status": "SUCCESS", ...}}
-                result = poll_data.get("result", {})
-                req_status = result.get("status", "")
-                progress = result.get("progress", "?")
+                    if poll_data is None:
+                        continue  # All retries failed, try next poll cycle
 
-                if req_status == "SUCCESS":
-                    audio_link = result.get("audio_link")
-                    logger.debug(
-                        "Vbee TTS: SUCCESS after {} polls, audio_link={}",
-                        attempt + 1, audio_link,
-                    )
-                    break
-                elif req_status == "FAILED":
-                    raise TTSError(
-                        f"Vbee TTS request failed: {poll_data}"
-                    )
-                else:
-                    logger.debug(
-                        "Vbee TTS: poll {}/{}, status={}, progress={}",
-                        attempt + 1, polls, req_status, progress,
-                    )
+                    # Response: {"status": 1, "result": {"status": "SUCCESS", ...}}
+                    result = poll_data.get("result", {})
+                    req_status = result.get("status", "")
+                    progress = result.get("progress", "?")
+
+                    if req_status == "SUCCESS":
+                        audio_link = result.get("audio_link")
+                        logger.debug(
+                            "Vbee TTS: SUCCESS after {} polls, audio_link={}",
+                            attempt + 1, audio_link,
+                        )
+                        break
+                    elif req_status == "FAILED":
+                        raise TTSError(
+                            f"Vbee TTS request failed: {poll_data}"
+                        )
+                    else:
+                        logger.debug(
+                            "Vbee TTS: poll {}/{}, status={}, progress={}",
+                            attempt + 1, polls, req_status, progress,
+                        )
 
             if not audio_link:
                 raise TTSError(
