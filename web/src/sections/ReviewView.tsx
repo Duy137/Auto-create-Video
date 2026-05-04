@@ -49,6 +49,7 @@ const SCENE_TYPE_LABELS: Record<string, string> = {
   media_showcase: 'Trình chiếu media',
   timeline: 'Dòng thời gian',
   news_intro: 'Tin tức mở đầu',
+  story_beats: 'Story Beats',  // [CryptoVN Custom]
 }
 
 interface ComparisonSide {

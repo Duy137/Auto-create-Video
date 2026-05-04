@@ -95,3 +95,12 @@ MAX_CONCURRENT_RENDERS: int = int(os.getenv("MAX_CONCURRENT_RENDERS", "1"))
 # ── Railway ──
 PORT: int = int(os.getenv("PORT", "8000"))
 
+# ── Story Beats Fallback (Concept D) ──  [CryptoVN Custom]
+STORY_BEAT_LLM_ENABLED: bool = os.getenv("STORY_BEAT_LLM_ENABLED", "true").strip().lower() in {
+    "1", "true", "yes", "on"
+}
+STORY_BEAT_LLM_MODEL: str = os.getenv("STORY_BEAT_LLM_MODEL", "qwen3.5-flash").strip()
+STORY_BEAT_LLM_TIMEOUT_SECONDS: float = float(os.getenv("STORY_BEAT_LLM_TIMEOUT_SECONDS", "8"))
+STORY_BEAT_MAX_BEATS: int = int(os.getenv("STORY_BEAT_MAX_BEATS", "5"))
+STORY_BEAT_MIN_BEAT_MS: int = int(os.getenv("STORY_BEAT_MIN_BEAT_MS", "1500"))
+

@@ -784,6 +784,41 @@ async def run_pipeline(
     else:
         logger.info("━━━ Step 2C: VLM Rerank skipped (use_reranker=False) ━━━")
 
+    # ── Step 2D: Story Beats Fallback ──  [CryptoVN Custom]
+    # After all media search + rerank, any scene that NEEDS media but still
+    # has none gets auto-converted to "story_beats" type with emoji+text beats.
+    NEEDS_MEDIA_TYPES = {"stock_background", "media_showcase", "news_intro"}
+    failed_scenes = [
+        s for s in scenes_with_media
+        if s.get("scene_type") in NEEDS_MEDIA_TYPES and not s.get("media_url")
+    ]
+    if failed_scenes:
+        logger.info(
+            "━━━ Step 2D: Story Beats Fallback ({} scenes without media) ━━━",
+            len(failed_scenes),
+        )
+        from app.nodes.story_beat_extractor import extract_story_beats
+        word_ts_dicts = tts_result.get("word_timestamps", [])
+        for scene in failed_scenes:
+            try:
+                beats, _token = await extract_story_beats(scene, word_ts_dicts)
+                if beats:
+                    scene["scene_type"] = "story_beats"
+                    scene["story_beats"] = beats
+                    scene["media_url"] = None
+                    scene["media_type"] = None
+                    logger.info(
+                        "  Scene {} → story_beats ({} beats)",
+                        scene.get("scene_index"), len(beats),
+                    )
+            except Exception as e:
+                logger.warning(
+                    "  Story beat extraction failed for scene {}: {}",
+                    scene.get("scene_index"), e,
+                )
+    else:
+        logger.info("━━━ Step 2D: Story Beats Fallback — not needed (all media found) ━━━")
+
     # ── Step 3: Compute scene timing from audio duration ──
     logger.info("━━━ Step 3: Scene Timing ━━━")
     scenes_timed = _compute_scene_timing(

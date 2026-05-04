@@ -41,6 +41,7 @@ import { Comparison } from "./scenes/Comparison";
 import { MediaShowcase } from "./scenes/MediaShowcase";
 import { Timeline } from "./scenes/Timeline";
 import { NewsIntro } from "./scenes/NewsIntro";
+import { StoryBeats } from "./scenes/StoryBeats";  // [CryptoVN Custom]
 
 // Shared components & utilities
 import { AnimatedCaption } from "./components/AnimatedCaption";
@@ -85,6 +86,9 @@ const SceneRenderer: React.FC<{
       return <Timeline scene={scene} colorPalette={colorPalette} wordTimestamps={wordTimestamps} />;
     case "news_intro":
       return <NewsIntro scene={scene} colorPalette={colorPalette} />;
+    // [CryptoVN Custom] Story Beats fallback
+    case "story_beats":
+      return <StoryBeats scene={scene} colorPalette={colorPalette} wordTimestamps={wordTimestamps} />;
     default:
       return <StockBackground scene={scene} colorPalette={colorPalette} wordTimestamps={wordTimestamps} />;
   }
@@ -235,7 +239,7 @@ const SceneWithEntryMotion: React.FC<{
     >
       <SceneRenderer scene={scene} colorPalette={colorPalette} wordTimestamps={wordTimestamps} />
       {/* Emoji pop-up overlay (per-scene, not on title_card) */}
-      {scene.emoji && scene.sceneType !== "title_card" && scene.sceneType !== "news_intro" && (
+      {scene.emoji && scene.sceneType !== "title_card" && scene.sceneType !== "news_intro" && scene.sceneType !== "story_beats" && (
         <EmojiPopup
           emoji={scene.emoji}
           narration={scene.narration}

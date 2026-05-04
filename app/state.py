@@ -127,6 +127,9 @@ class Scene(BaseModel):
     # Emoji pop-up (optional, LLM-generated)
     emoji: str | None = None  # single emoji for pop-up display
 
+    # Story Beats fallback data (optional, auto-generated)  [CryptoVN Custom]
+    story_beats: list[dict] | None = None  # [{text, emoji, start_ms, end_ms}]
+
 
 # ── Subtitle Settings ──
 
@@ -199,3 +202,50 @@ class VideoProps(BaseModel):
     word_timestamps: list[WordTimestamp]
     scenes: list[Scene]
     settings: VideoSettings = VideoSettings()
+
+
+# ══════════════════════════════════════════════
+# TOKEN USAGE & COST TRACKING  [CryptoVN Custom]
+# ══════════════════════════════════════════════
+
+# Pricing per 1M tokens (USD)
+MODEL_PRICING: dict[str, dict[str, float]] = {
+    "gpt-4o-mini-tts": {"input": 0.0, "output": 12.0},
+    "gpt-4o-mini": {"input": 0.15, "output": 0.60},
+    "tongyi-embedding-vision-flash": {"input": 0.03, "output": 0.0},
+    "qwen3.5-flash": {"input": 0.1, "output": 0.4},
+    "qwen-plus": {"input": 0.1, "output": 0.4},
+    "qwen-turbo": {"input": 0.1, "output": 0.4},
+}
+
+
+def calc_cost(model: str, input_tokens: int, output_tokens: int) -> float:
+    """Calculate USD cost for a single LLM call."""
+    pricing = MODEL_PRICING.get(model)
+    if not pricing:
+        return 0.0
+    cost_in = (input_tokens / 1_000_000) * pricing["input"]
+    cost_out = (output_tokens / 1_000_000) * pricing["output"]
+    return round(cost_in + cost_out, 8)
+
+
+class TokenUsage(BaseModel):
+    """Token usage record for a single LLM / API call."""
+    model: str
+    step: str                   # e.g. "story_beats.extract", "content.splitter"
+    input_tokens: int = 0
+    output_tokens: int = 0
+    cost_usd: float = 0.0
+
+
+# ══════════════════════════════════════════════
+# STORY BEAT (for Story Beats fallback scene)  [CryptoVN Custom]
+# ══════════════════════════════════════════════
+
+
+class StoryBeat(BaseModel):
+    """A single micro-beat within a story_beats scene."""
+    text: str
+    emoji: str = "✨"
+    start_ms: float = 0.0
+    end_ms: float = 0.0

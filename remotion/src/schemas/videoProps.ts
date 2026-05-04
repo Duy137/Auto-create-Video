@@ -65,6 +65,15 @@ const TimelineEventSchema = z.object({
   description: z.string().max(40).nullable().optional(),
 });
 
+// ── Story Beat (for Story Beats fallback scene) ──  [CryptoVN Custom]
+
+const StoryBeatSchema = z.object({
+  text: z.string(),
+  emoji: z.string().default("✨"),
+  startMs: z.number().nonnegative().default(0),
+  endMs: z.number().nonnegative().default(0),
+});
+
 // ── Scene Data ──
 
 const SceneSchema = z.object({
@@ -80,6 +89,7 @@ const SceneSchema = z.object({
     "media_showcase",
     "timeline",
     "news_intro",
+    "story_beats",  // [CryptoVN Custom]
   ]),
   narration: z.string(),
 
@@ -146,6 +156,9 @@ const SceneSchema = z.object({
 
   // Emoji pop-up (optional, LLM-generated)
   emoji: z.string().optional().nullable(),
+
+  // Story Beats fallback data (optional)  [CryptoVN Custom]
+  storyBeats: z.array(StoryBeatSchema).optional().nullable(),
 });
 
 // ── Subtitle Settings ──
@@ -207,6 +220,7 @@ export const VideoPropsSchema = z.object({
 
 export type VideoProps = z.infer<typeof VideoPropsSchema>;
 export type SceneData = z.infer<typeof SceneSchema>;
+export type StoryBeat = z.infer<typeof StoryBeatSchema>;  // [CryptoVN Custom]
 
 // Re-export sub-schemas for use in components
 export {
