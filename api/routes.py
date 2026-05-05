@@ -676,9 +676,25 @@ async def _run_pipeline_background(
                 props_file = Path(OUTPUT_DIR) / job_id / "video_props.json"
                 props_data = json.loads(props_file.read_text(encoding="utf-8"))
 
+                # [CryptoVN Custom] Re-read job from DB to merge bg settings
+                # that may have been uploaded AFTER pipeline started
+                from sqlalchemy.orm.attributes import flag_modified
+                db.expire_all()  # Clear session cache to get fresh data
                 job = (await db.execute(select(Job).where(Job.id == job_id))).scalar_one()
+                fresh_settings = job.settings or {}
+                bg_keys = ["custom_background_url", "custom_background_type", "custom_background_duration_sec"]
+                has_bg = any(fresh_settings.get(k) for k in bg_keys)
+                if has_bg:
+                    props_settings = props_data.get("settings", {})
+                    for k in bg_keys:
+                        if fresh_settings.get(k) is not None:
+                            props_settings[k] = fresh_settings[k]
+                    props_data["settings"] = props_settings
+                    logger.info("  Merged custom background from DB into props: {}", fresh_settings.get("custom_background_url"))
+
                 job.props = props_data
                 job.status = "review"
+                flag_modified(job, "props")
                 await db.commit()
 
                 await broadcast_progress(job_id, ProgressEvent(
@@ -1161,4 +1177,97 @@ async def upload_logo(
     return {
         "logo_url": f"assets/{job_id}/logo{ext}",
         "preview_url": f"/api/demo/assets/{job_id}/logo{ext}",
+    }
+
+
+# ── Custom Background Upload — [CryptoVN Custom] ──
+
+_ALLOWED_BG_TYPES = {
+    "image/jpeg", "image/png", "image/webp",
+    "video/mp4", "video/webm",
+}
+_MAX_BG_SIZE = 50 * 1024 * 1024  # 50 MB
+
+
+@router.post(
+    "/jobs/{job_id}/background/upload",
+    summary="Upload custom background image/video for the entire video",
+)
+async def upload_custom_background(
+    job_id: str,
+    file: Annotated[UploadFile, File()],
+    user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+):
+    """Upload a custom background that replaces the gradient preset for the whole video."""
+    job = await _get_user_job(db, job_id, user.id)
+
+    if file.content_type not in _ALLOWED_BG_TYPES:
+        raise HTTPException(400, f"File type not allowed: {file.content_type}. Accepted: JPEG, PNG, WebP, MP4, WebM.")
+
+    content = await file.read()
+    if len(content) > _MAX_BG_SIZE:
+        raise HTTPException(400, "File too large (max 50MB)")
+
+    assets_dir = Path(REMOTION_DIR) / "public" / "assets" / job_id
+    assets_dir.mkdir(parents=True, exist_ok=True)
+
+    ext = Path(file.filename or "bg").suffix or (".mp4" if file.content_type.startswith("video") else ".jpg")
+    dest = assets_dir / f"custom_bg{ext}"
+    dest.write_bytes(content)
+
+    media_type = "video" if file.content_type.startswith("video") else "image"
+    bg_url = f"assets/{job_id}/custom_bg{ext}"
+
+    # [CryptoVN Custom] Detect video duration for Remotion Loop
+    duration_sec: float | None = None
+    if media_type == "video":
+        try:
+            import subprocess
+            import shutil as _shutil
+            ffprobe = _shutil.which("ffprobe") or "ffprobe"
+            result = subprocess.run(
+                [ffprobe, "-v", "error", "-select_streams", "v:0",
+                 "-show_entries", "format=duration",
+                 "-of", "csv=p=0", str(dest)],
+                capture_output=True, text=True, timeout=10,
+            )
+            if result.returncode == 0 and result.stdout.strip():
+                duration_sec = float(result.stdout.strip())
+        except Exception:
+            duration_sec = 30.0  # Fallback: assume 30s
+
+    # [CryptoVN Custom] Persist bg settings into job DB so pipeline can use them
+    from sqlalchemy.orm.attributes import flag_modified
+
+    bg_settings = {
+        "custom_background_url": bg_url,
+        "custom_background_type": media_type,
+        "custom_background_duration_sec": duration_sec,
+    }
+
+    # Update job.settings (used by pipeline's _build_video_settings)
+    # Use dict() copy to ensure new object reference for SQLAlchemy change detection
+    updated_settings = dict(job.settings or {})
+    updated_settings.update(bg_settings)
+    job.settings = updated_settings
+    flag_modified(job, "settings")
+
+    # Also update job.props if they already exist (Review stage)
+    if job.props:
+        updated_props = json.loads(json.dumps(job.props))  # deep copy
+        props_settings = updated_props.get("settings", {})
+        props_settings.update(bg_settings)
+        updated_props["settings"] = props_settings
+        job.props = updated_props
+        flag_modified(job, "props")
+
+    await db.commit()
+    logger.info("  Saved bg settings to DB: job={} bg_url={}", job_id, bg_url)
+
+    return {
+        "bg_url": bg_url,
+        "bg_type": media_type,
+        "bg_duration_sec": duration_sec,
+        "preview_url": f"/api/demo/assets/{job_id}/custom_bg{ext}",
     }

@@ -117,7 +117,7 @@ class Scene(BaseModel):
     # New scene type data (optional)
     comparison_sides: list[ComparisonSide] | None = None
     timeline_events: list[TimelineEvent] | None = None
-    media_layout: str = "cinema"  # "fullscreen" | "cinema" | "fit"
+    media_layout: str = "fit"  # "fullscreen" | "cinema" | "fit"
 
     # TitleCard redesign fields (optional, LLM-enhanced)
     title_lines: list[dict] | None = None  # [{text, style: normal|highlight|accent}]
@@ -168,7 +168,7 @@ class VideoSettings(BaseModel):
     bgm_url: str | None = None
     bgm_volume: float = 0.2
     watermark_text: str | None = None  # e.g. "@ainius.net"
-    watermark_position: str = "bottom-right"  # top-left | top-right | bottom-left | bottom-right | center
+    watermark_position: str = "top-right"  # top-left | top-right | bottom-left | bottom-right | center
     watermark_opacity: float = 0.5
     watermark_logo_url: str | None = None
     watermark_mode: str = "text"  # text | logo | both
@@ -176,6 +176,10 @@ class VideoSettings(BaseModel):
     sfx: SfxSettings = SfxSettings()
     cta: CtaSettings = CtaSettings()
     background_preset: str = "steel_blue"
+    # [CryptoVN Custom] Custom background
+    custom_background_url: str | None = None
+    custom_background_type: str = "image"  # "image" | "video"
+    custom_background_duration_sec: float | None = None
 
 
 # ══════════════════════════════════════════════

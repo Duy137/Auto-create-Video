@@ -261,7 +261,7 @@ const sampleProps: VideoProps = {
       enabled: true,
       volume: 0.25,
     },
-    watermarkPosition: "bottom-right",
+    watermarkPosition: "top-right",
     watermarkOpacity: 0.5,
     watermarkLogoUrl: null,
     watermarkMode: "text",
@@ -272,6 +272,9 @@ const sampleProps: VideoProps = {
       durationMs: 3000,
     },
     backgroundPreset: "steel_blue",
+    customBackgroundUrl: null,
+    customBackgroundType: "image",
+    customBackgroundDurationSec: null,
   },
 };
 

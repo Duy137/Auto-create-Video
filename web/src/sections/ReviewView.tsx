@@ -103,13 +103,22 @@ function getPreviewUrl(scene: Scene): string | null {
   const url = scene.media_url
   if (!url) return null
   if (url.startsWith('http') || url.startsWith('/api/')) return url
-  // Local path — check _preview_url
+  // Relative asset path (e.g. "assets/jobid/scene_1.mp4") → serve via API
+  if (url.startsWith('assets/')) return `/api/demo/${url}`
+  // Local absolute path (e.g. "D:\...\output\jobid\media\scene.mp4") → serve via API
+  const normalized = url.replace(/\\/g, '/')
+  const outputIdx = normalized.indexOf('output/')
+  if (outputIdx >= 0) {
+    const relPath = normalized.substring(outputIdx + 'output/'.length)
+    return `/api/outputs/${relPath}`
+  }
+  // Fallback: check _preview_url
   return (scene as any)._preview_url || null
 }
 
 /** Visual mockup preview for non-stock scene types */
-function ScenePreviewMockup({ scene, palette }: { scene: Scene; palette: Record<string, string> }) {
-  const bg = palette?.background || '#0f0f0f'
+function ScenePreviewMockup({ scene, palette, hasCustomBg = false }: { scene: Scene; palette: Record<string, string>; hasCustomBg?: boolean }) {
+  const bg = hasCustomBg ? 'transparent' : (palette?.background || '#0f0f0f')
   const primary = palette?.primary || '#6366f1'
   const text = palette?.text || '#ffffff'
 
@@ -117,7 +126,7 @@ function ScenePreviewMockup({ scene, palette }: { scene: Scene; palette: Record<
     case 'title_card':
       return (
         <div className="w-full h-full flex flex-col items-center justify-center p-8 gap-4"
-             style={{ background: `linear-gradient(135deg, ${bg}, ${primary}20)` }}>
+             style={{ background: hasCustomBg ? 'transparent' : `linear-gradient(135deg, ${bg}, ${primary}20)` }}>
           <div className="text-2xl font-black text-center leading-tight" style={{ color: text }}>
             {scene.narration?.slice(0, 60)}
           </div>
@@ -266,7 +275,7 @@ function ScenePreviewMockup({ scene, palette }: { scene: Scene; palette: Record<
 
     case 'news_intro':
       return (
-        <div className="w-full h-full flex flex-col relative" style={{ background: '#0a1200' }}>
+        <div className="w-full h-full flex flex-col relative" style={{ background: hasCustomBg ? 'transparent' : '#0a1200' }}>
           {/* Top half: actual media or placeholder */}
           <div className="flex-1 overflow-hidden">
             {scene.media_url ? (
@@ -546,7 +555,26 @@ export default function ReviewView({
 
         {/* MIDDLE PANE: Video Preview — fixed, no scroll */}
         <div className="flex flex-col bg-muted/5 items-center justify-center p-8 relative overflow-hidden">
-          <div className="relative aspect-[9/16] h-full max-h-[680px] border shadow-2xl rounded-2xl overflow-hidden bg-black group-hover:ring-1 ring-white/10 transition-all">
+          <div className="relative isolate aspect-[9/16] h-full max-h-[680px] border shadow-2xl rounded-2xl overflow-hidden bg-black group-hover:ring-1 ring-white/10 transition-all">
+            {/* [CryptoVN Custom] Custom background layer behind all scene content */}
+            {(videoProps as any).settings?.custom_background_url && (
+              <div className="absolute inset-0 -z-10">
+                {(videoProps as any).settings?.custom_background_type === 'video' ? (
+                  <video
+                    src={`/api/demo/${(videoProps as any).settings.custom_background_url}`}
+                    className="w-full h-full object-cover"
+                    autoPlay muted loop playsInline
+                  />
+                ) : (
+                  <img
+                    src={`/api/demo/${(videoProps as any).settings.custom_background_url}`}
+                    className="w-full h-full object-cover"
+                    alt=""
+                  />
+                )}
+                <div className="absolute inset-0 bg-black/20" />
+              </div>
+            )}
             {getPreviewUrl(selectedScene) ? (
               <>
                 {/* Media loading overlay */}
@@ -567,7 +595,7 @@ export default function ReviewView({
                 {selectedScene?.scene_type === 'media_showcase' && (selectedScene?.media_layout || 'cinema') === 'cinema' ? (
                   // Cinema layout: 16:9 container in center with title above
                   <div className="w-full h-full flex flex-col items-center justify-center gap-4 p-4" 
-                       style={{ background: palette.background || '#0a0a0a' }}>
+                       style={{ background: (videoProps as any).settings?.custom_background_url ? 'transparent' : (palette.background || '#0a0a0a') }}>
                     <p className="text-sm font-bold text-center px-6 line-clamp-2" 
                        style={{ color: palette.text || '#fff' }}>
                       {selectedScene?.visual_description || selectedScene?.narration}
@@ -597,7 +625,7 @@ export default function ReviewView({
                 ) : selectedScene?.scene_type === 'media_showcase' && selectedScene?.media_layout === 'fit' ? (
                   // Fit layout: media width=100%, natural height, centered vertically
                   <div className="w-full h-full flex items-center justify-center"
-                       style={{ background: palette.background || '#0a0a0a' }}>
+                       style={{ background: (videoProps as any).settings?.custom_background_url ? 'transparent' : (palette.background || '#0a0a0a') }}>
                     {selectedScene.media_type === 'video' ? (
                       <video
                         key={getPreviewUrl(selectedScene)!}
@@ -622,7 +650,7 @@ export default function ReviewView({
                   </div>
                 ) : selectedScene?.scene_type === 'news_intro' ? (
                   // [CryptoVN Custom] NewsIntro: media top 50%, brand overlay bottom 50%
-                  <div className="w-full h-full flex flex-col relative" style={{ background: '#0a1200' }}>
+                  <div className="w-full h-full flex flex-col relative" style={{ background: (videoProps as any).settings?.custom_background_url ? 'transparent' : '#0a1200' }}>
                     {/* Top half: media with cover */}
                     <div className="w-full h-1/2 overflow-hidden">
                       {selectedScene.media_type === 'video' ? (
@@ -695,7 +723,7 @@ export default function ReviewView({
               </>
             ) : !NEEDS_MEDIA.has(selectedScene?.scene_type || '') ? (
               <div className="w-full h-full relative">
-                <ScenePreviewMockup scene={selectedScene} palette={palette} />
+                <ScenePreviewMockup scene={selectedScene} palette={palette} hasCustomBg={!!(videoProps as any).settings?.custom_background_url} />
                 {/* Subtitle overlay */}
                 <div className="absolute bottom-20 left-6 right-6 text-center">
                   <p className="text-foreground/80 text-lg font-bold leading-tight">
@@ -863,32 +891,246 @@ export default function ReviewView({
 
               <Separator className="bg-white/5" />
 
-              {/* Comparison preview */}
+              {/* Comparison editor — [CryptoVN Custom] */}
               {selectedScene?.scene_type === 'comparison' && selectedScene?.comparison_sides && (
                 <div className="space-y-3">
                   <Label className="text-xs uppercase tracking-widest text-muted-foreground font-bold">Nội dung so sánh</Label>
                   <div className="grid grid-cols-2 gap-2">
                     {selectedScene.comparison_sides.map((side, i) => (
-                      <div key={i} className="p-3 bg-muted/30 rounded-xl border border-white/5 space-y-1">
-                        <span className="text-xs font-bold text-primary">{side.label}</span>
-                        <ul className="text-[11px] text-muted-foreground space-y-0.5 list-disc pl-3">
-                          {side.points.map((p, j) => <li key={j}>{p}</li>)}
-                        </ul>
+                      <div key={i} className="p-3 bg-muted/30 rounded-xl border border-white/5 space-y-2">
+                        <Input
+                          value={side.label}
+                          onChange={(e) => {
+                            const newProps = { ...videoProps }
+                            const scenes = [...newProps.scenes]
+                            const sides = [...(selectedScene.comparison_sides || [])]
+                            sides[i] = { ...sides[i], label: e.target.value }
+                            scenes[selectedSceneIndex] = { ...selectedScene, comparison_sides: sides }
+                            onPropsUpdate({ ...newProps, scenes })
+                          }}
+                          className="h-7 text-xs font-bold bg-muted/20 border-white/5"
+                          placeholder="Nhãn..."
+                        />
+                        <div className="space-y-1">
+                          {side.points.map((p, j) => (
+                            <div key={j} className="flex items-center gap-1">
+                              <Input
+                                value={p}
+                                maxLength={30}
+                                onChange={(e) => {
+                                  const newProps = { ...videoProps }
+                                  const scenes = [...newProps.scenes]
+                                  const sides = [...(selectedScene.comparison_sides || [])]
+                                  const points = [...sides[i].points]
+                                  points[j] = e.target.value
+                                  sides[i] = { ...sides[i], points }
+                                  scenes[selectedSceneIndex] = { ...selectedScene, comparison_sides: sides }
+                                  onPropsUpdate({ ...newProps, scenes })
+                                }}
+                                className="h-6 text-[11px] bg-muted/20 border-white/5 flex-1"
+                              />
+                              {side.points.length > 1 && (
+                                <button
+                                  className="text-destructive/60 hover:text-destructive text-xs px-1"
+                                  onClick={() => {
+                                    const newProps = { ...videoProps }
+                                    const scenes = [...newProps.scenes]
+                                    const sides = [...(selectedScene.comparison_sides || [])]
+                                    const points = sides[i].points.filter((_, k) => k !== j)
+                                    sides[i] = { ...sides[i], points }
+                                    scenes[selectedSceneIndex] = { ...selectedScene, comparison_sides: sides }
+                                    onPropsUpdate({ ...newProps, scenes })
+                                  }}
+                                >✕</button>
+                              )}
+                            </div>
+                          ))}
+                          {side.points.length < 5 && (
+                            <button
+                              className="text-[10px] text-primary/60 hover:text-primary"
+                              onClick={() => {
+                                const newProps = { ...videoProps }
+                                const scenes = [...newProps.scenes]
+                                const sides = [...(selectedScene.comparison_sides || [])]
+                                const points = [...sides[i].points, '']
+                                sides[i] = { ...sides[i], points }
+                                scenes[selectedSceneIndex] = { ...selectedScene, comparison_sides: sides }
+                                onPropsUpdate({ ...newProps, scenes })
+                              }}
+                            >+ Thêm điểm</button>
+                          )}
+                        </div>
                       </div>
                     ))}
                   </div>
                 </div>
               )}
 
-              {/* Timeline preview */}
+              {/* Timeline editor — [CryptoVN Custom] */}
               {selectedScene?.scene_type === 'timeline' && selectedScene?.timeline_events && (
                 <div className="space-y-3">
                   <Label className="text-xs uppercase tracking-widest text-muted-foreground font-bold">Dòng thời gian</Label>
                   <div className="space-y-1.5">
                     {selectedScene.timeline_events.map((ev, i) => (
                       <div key={i} className="flex items-center gap-2 p-2 bg-muted/30 rounded-lg border border-white/5">
-                        <Badge variant="outline" className="text-[9px] shrink-0">{ev.label}</Badge>
-                        <span className="text-xs text-foreground/80 truncate">{ev.title}</span>
+                        <Input
+                          value={ev.label}
+                          maxLength={10}
+                          onChange={(e) => {
+                            const newProps = { ...videoProps }
+                            const scenes = [...newProps.scenes]
+                            const events = [...(selectedScene.timeline_events || [])]
+                            events[i] = { ...events[i], label: e.target.value }
+                            scenes[selectedSceneIndex] = { ...selectedScene, timeline_events: events }
+                            onPropsUpdate({ ...newProps, scenes })
+                          }}
+                          className="h-6 w-16 text-[9px] font-mono bg-muted/20 border-white/5 shrink-0"
+                        />
+                        <Input
+                          value={ev.title}
+                          maxLength={20}
+                          onChange={(e) => {
+                            const newProps = { ...videoProps }
+                            const scenes = [...newProps.scenes]
+                            const events = [...(selectedScene.timeline_events || [])]
+                            events[i] = { ...events[i], title: e.target.value }
+                            scenes[selectedSceneIndex] = { ...selectedScene, timeline_events: events }
+                            onPropsUpdate({ ...newProps, scenes })
+                          }}
+                          className="h-6 text-xs bg-muted/20 border-white/5 flex-1"
+                        />
+                        {selectedScene.timeline_events!.length > 3 && (
+                          <button
+                            className="text-destructive/60 hover:text-destructive text-xs px-1 shrink-0"
+                            onClick={() => {
+                              const newProps = { ...videoProps }
+                              const scenes = [...newProps.scenes]
+                              const events = (selectedScene.timeline_events || []).filter((_, k) => k !== i)
+                              scenes[selectedSceneIndex] = { ...selectedScene, timeline_events: events }
+                              onPropsUpdate({ ...newProps, scenes })
+                            }}
+                          >✕</button>
+                        )}
+                      </div>
+                    ))}
+                    {(selectedScene.timeline_events?.length ?? 0) < 5 && (
+                      <button
+                        className="text-[10px] text-primary/60 hover:text-primary w-full text-center py-1"
+                        onClick={() => {
+                          const newProps = { ...videoProps }
+                          const scenes = [...newProps.scenes]
+                          const events = [...(selectedScene.timeline_events || []), { label: '', title: '', description: '' }]
+                          scenes[selectedSceneIndex] = { ...selectedScene, timeline_events: events }
+                          onPropsUpdate({ ...newProps, scenes })
+                        }}
+                      >+ Thêm sự kiện</button>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* EmojiGrid / InfoCard editor — [CryptoVN Custom] */}
+              {(selectedScene?.scene_type === 'emoji_grid' || selectedScene?.scene_type === 'info_card') && selectedScene?.card_items && (
+                <div className="space-y-3">
+                  <Label className="text-xs uppercase tracking-widest text-muted-foreground font-bold">
+                    {selectedScene.scene_type === 'emoji_grid' ? 'Lưới biểu tượng' : 'Thẻ thông tin'}
+                  </Label>
+                  <div className="space-y-2">
+                    {selectedScene.card_items.map((item, i) => (
+                      <div key={i} className="flex items-center gap-2 p-2 bg-muted/30 rounded-lg border border-white/5">
+                        <Input
+                          value={item.icon}
+                          onChange={(e) => {
+                            const newProps = { ...videoProps }
+                            const scenes = [...newProps.scenes]
+                            const items = [...(selectedScene.card_items || [])]
+                            items[i] = { ...items[i], icon: e.target.value }
+                            scenes[selectedSceneIndex] = { ...selectedScene, card_items: items }
+                            onPropsUpdate({ ...newProps, scenes })
+                          }}
+                          className="h-7 w-10 text-center text-lg bg-muted/20 border-white/5 shrink-0"
+                          placeholder="🔥"
+                        />
+                        <div className="flex-1 space-y-1">
+                          <Input
+                            value={item.title}
+                            onChange={(e) => {
+                              const newProps = { ...videoProps }
+                              const scenes = [...newProps.scenes]
+                              const items = [...(selectedScene.card_items || [])]
+                              items[i] = { ...items[i], title: e.target.value }
+                              scenes[selectedSceneIndex] = { ...selectedScene, card_items: items }
+                              onPropsUpdate({ ...newProps, scenes })
+                            }}
+                            className="h-6 text-xs bg-muted/20 border-white/5"
+                            placeholder="Tiêu đề"
+                          />
+                          <Input
+                            value={item.subtitle}
+                            onChange={(e) => {
+                              const newProps = { ...videoProps }
+                              const scenes = [...newProps.scenes]
+                              const items = [...(selectedScene.card_items || [])]
+                              items[i] = { ...items[i], subtitle: e.target.value }
+                              scenes[selectedSceneIndex] = { ...selectedScene, card_items: items }
+                              onPropsUpdate({ ...newProps, scenes })
+                            }}
+                            className="h-6 text-[11px] bg-muted/20 border-white/5"
+                            placeholder="Phụ đề"
+                          />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* StatsHighlight editor — [CryptoVN Custom] */}
+              {selectedScene?.scene_type === 'stats_highlight' && selectedScene?.stats && (
+                <div className="space-y-3">
+                  <Label className="text-xs uppercase tracking-widest text-muted-foreground font-bold">Số liệu nổi bật</Label>
+                  <div className="space-y-2">
+                    {selectedScene.stats.map((stat, i) => (
+                      <div key={i} className="flex items-center gap-2 p-2 bg-muted/30 rounded-lg border border-white/5">
+                        <input
+                          type="color"
+                          value={stat.color || '#6366f1'}
+                          onChange={(e) => {
+                            const newProps = { ...videoProps }
+                            const scenes = [...newProps.scenes]
+                            const stats = [...(selectedScene.stats || [])]
+                            stats[i] = { ...stats[i], color: e.target.value }
+                            scenes[selectedSceneIndex] = { ...selectedScene, stats }
+                            onPropsUpdate({ ...newProps, scenes })
+                          }}
+                          className="w-7 h-7 rounded cursor-pointer shrink-0 border-0"
+                        />
+                        <Input
+                          value={stat.value}
+                          onChange={(e) => {
+                            const newProps = { ...videoProps }
+                            const scenes = [...newProps.scenes]
+                            const stats = [...(selectedScene.stats || [])]
+                            stats[i] = { ...stats[i], value: e.target.value }
+                            scenes[selectedSceneIndex] = { ...selectedScene, stats }
+                            onPropsUpdate({ ...newProps, scenes })
+                          }}
+                          className="h-7 w-20 text-sm font-bold bg-muted/20 border-white/5 shrink-0"
+                          placeholder="85%"
+                        />
+                        <Input
+                          value={stat.label}
+                          onChange={(e) => {
+                            const newProps = { ...videoProps }
+                            const scenes = [...newProps.scenes]
+                            const stats = [...(selectedScene.stats || [])]
+                            stats[i] = { ...stats[i], label: e.target.value }
+                            scenes[selectedSceneIndex] = { ...selectedScene, stats }
+                            onPropsUpdate({ ...newProps, scenes })
+                          }}
+                          className="h-7 text-xs bg-muted/20 border-white/5 flex-1"
+                          placeholder="Nhãn"
+                        />
                       </div>
                     ))}
                   </div>
@@ -904,7 +1146,7 @@ export default function ReviewView({
                     Kiểu hiển thị Media
                   </Label>
                   <Select
-                    value={selectedScene?.media_layout || 'cinema'}
+                    value={selectedScene?.media_layout || 'fit'}
                     onValueChange={(val) => {
                       const newProps = { ...videoProps }
                       const scenes = [...newProps.scenes]
@@ -1178,7 +1420,7 @@ export default function ReviewView({
                   {/* Position + Opacity */}
                   <div className="flex gap-2">
                     <Select
-                      value={(videoProps as any).settings?.watermark_position || 'bottom-right'}
+                      value={(videoProps as any).settings?.watermark_position || 'top-right'}
                       onValueChange={(val) => {
                         const settings = { ...((videoProps as any).settings || {}) }
                         settings.watermark_position = val
@@ -1285,6 +1527,103 @@ export default function ReviewView({
                       <SelectItem value="minimal">Minimal (nhỏ gọn)</SelectItem>
                     </SelectContent>
                   </Select>
+                </div>
+
+                {/* 🎨 Custom Background — [CryptoVN Custom] */}
+                <div className="space-y-3 p-4 bg-muted/20 rounded-xl border border-white/5">
+                  <span className="text-xs font-semibold">🎨 Hình nền tùy chỉnh</span>
+                  <p className="text-[10px] text-muted-foreground">
+                    Upload ảnh/video thay thế gradient nền. Bỏ trống để dùng preset mặc định.
+                  </p>
+
+                  {/* Hidden file input — shared by both "Thay" button and upload label */}
+                  <input
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp,video/mp4,video/webm"
+                    className="hidden"
+                    id="bg-upload"
+                    onChange={async (e) => {
+                      const file = e.target.files?.[0]
+                      if (!file) return
+                      const form = new FormData()
+                      form.append('file', file)
+                      try {
+                        toast.info('Đang tải hình nền...')
+                        const result = await api.post(`/jobs/${jobId}/background/upload`, form)
+                        const settings = { ...((videoProps as any).settings || {}) }
+                        settings.custom_background_url = result.bg_url
+                        settings.custom_background_type = result.bg_type
+                        settings.custom_background_duration_sec = result.bg_duration_sec
+                        onPropsUpdate({ ...videoProps, settings } as any)
+                        toast.success('Đã upload hình nền!')
+                      } catch (err: any) {
+                        toast.error('Upload thất bại: ' + err.message)
+                      }
+                      // Reset input so re-uploading same file triggers onChange
+                      e.target.value = ''
+                    }}
+                  />
+
+                  {(videoProps as any).settings?.custom_background_url ? (
+                    <div className="space-y-2">
+                      {/* Visual preview */}
+                      <div className="relative w-full h-24 rounded-lg overflow-hidden bg-black">
+                        {(videoProps as any).settings?.custom_background_type === 'video' ? (
+                          <video
+                            src={`/api/demo/${(videoProps as any).settings.custom_background_url}`}
+                            className="w-full h-full object-cover opacity-80"
+                            autoPlay muted loop playsInline
+                          />
+                        ) : (
+                          <img
+                            src={`/api/demo/${(videoProps as any).settings.custom_background_url}`}
+                            className="w-full h-full object-cover opacity-80"
+                            alt="Custom background"
+                          />
+                        )}
+                        <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
+                        <span className="absolute bottom-1.5 left-2 text-[10px] text-white/80 font-medium">
+                          Hình nền hiện tại
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2 p-2 bg-muted/30 rounded-lg">
+                        <span className="text-lg">
+                          {(videoProps as any).settings?.custom_background_type === 'video' ? '🎬' : '🖼️'}
+                        </span>
+                        <span className="text-[10px] text-muted-foreground flex-1 truncate">
+                          {((videoProps as any).settings.custom_background_url || '').split('/').pop()}
+                        </span>
+                        <label
+                          htmlFor="bg-upload"
+                          className="h-5 px-1.5 text-[10px] text-primary cursor-pointer hover:underline flex items-center"
+                        >
+                          Thay
+                        </label>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="h-5 text-[10px] text-destructive"
+                          onClick={() => {
+                            const settings = { ...((videoProps as any).settings || {}) }
+                            settings.custom_background_url = null
+                            settings.custom_background_type = 'image'
+                            settings.custom_background_duration_sec = null
+                            onPropsUpdate({ ...videoProps, settings } as any)
+                          }}
+                        >
+                          Xóa
+                        </Button>
+                      </div>
+                    </div>
+                  ) : (
+                    <label
+                      htmlFor="bg-upload"
+                      className="flex items-center justify-center gap-2 p-3 border border-dashed border-white/10 rounded-lg cursor-pointer hover:border-primary/30 transition-colors"
+                    >
+                      <Upload className="w-4 h-4 text-muted-foreground" />
+                      <span className="text-xs text-muted-foreground">Upload ảnh hoặc video nền</span>
+                    </label>
+                  )}
                 </div>
               </div>
 

@@ -3,7 +3,7 @@ import { api, getToken } from '@/api/client'
 import { toast } from "sonner"
 import {
   Zap, Clapperboard, Play, Volume2, Music, Type,
-  Palette, Settings2, Upload, X
+  Palette, Settings2, Upload, X, Image
 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -111,6 +111,10 @@ export default function SetupView({ onJobCreated, initialSettings }: SetupViewPr
   const [previewPlaying, setPreviewPlaying] = useState(false)
   const [bgmUploading, setBgmUploading] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  // [CryptoVN Custom] Custom background file
+  const [customBgFile, setCustomBgFile] = useState<File | null>(null)
+  const [customBgPreview, setCustomBgPreview] = useState<string | null>(null)
+  const bgFileInputRef = useRef<HTMLInputElement>(null)
 
   const wordCount = text.trim().split(/\s+/).filter(Boolean).length
   const canSubmit = wordCount >= 30 && wordCount <= 500 && !submitting
@@ -163,6 +167,21 @@ export default function SetupView({ onJobCreated, initialSettings }: SetupViewPr
           voice: effectiveVoice,
         },
       })
+
+      // [CryptoVN Custom] Upload background after job creation
+      if (customBgFile) {
+        try {
+          toast.info('Đang tải hình nền...')
+          const form = new FormData()
+          form.append('file', customBgFile)
+          const bgResult = await api.post(`/jobs/${data.id}/background/upload`, form)
+          // Background will be available for the job pipeline
+          toast.success('Đã tải hình nền thành công!')
+        } catch (bgErr: any) {
+          toast.warning('Tải hình nền thất bại: ' + bgErr.message + '. Video sẽ dùng gradient mặc định.')
+        }
+      }
+
       toast.success('Đã tạo tiến trình! Đang bắt đầu xử lý...')
       onJobCreated(data.id, settings)
     } catch (err: any) {
@@ -575,6 +594,91 @@ export default function SetupView({ onJobCreated, initialSettings }: SetupViewPr
                       />
                     </div>
                   </div>
+                </div>
+
+                {/* [CryptoVN Custom] Custom Background Upload */}
+                <div className="md:col-span-2 space-y-3 p-4 bg-muted/20 rounded-xl border border-white/5">
+                  <Label className="flex items-center gap-2">
+                    <Image className="w-4 h-4" /> Hình nền tùy chỉnh
+                    <span className="text-muted-foreground font-normal text-xs">(tùy chọn)</span>
+                  </Label>
+                  <p className="text-xs text-muted-foreground">
+                    Upload ảnh/video thay thế gradient nền cho toàn bộ video. Video sẽ tự động lặp lại.
+                  </p>
+
+                  {customBgFile ? (
+                    <div className="space-y-2">
+                      {customBgPreview && (
+                        <div className="relative w-full h-32 rounded-lg overflow-hidden bg-black">
+                          {customBgFile.type.startsWith('video') ? (
+                            <video
+                              src={customBgPreview}
+                              className="w-full h-full object-cover"
+                              autoPlay muted loop playsInline
+                            />
+                          ) : (
+                            <img
+                              src={customBgPreview}
+                              className="w-full h-full object-cover"
+                              alt="Custom background preview"
+                            />
+                          )}
+                        </div>
+                      )}
+                      <div className="flex items-center gap-3 p-3 bg-muted/30 rounded-lg border border-white/5">
+                        <span className="text-lg">
+                          {customBgFile.type.startsWith('video') ? '🎬' : '🖼️'}
+                        </span>
+                        <span className="text-sm truncate flex-1 text-foreground/80">
+                          {customBgFile.name}
+                        </span>
+                        <span className="text-xs text-muted-foreground">
+                          {(customBgFile.size / 1024 / 1024).toFixed(1)} MB
+                        </span>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-7 w-7 shrink-0 hover:bg-destructive/10 hover:text-destructive"
+                          onClick={() => {
+                            setCustomBgFile(null)
+                            if (customBgPreview) URL.revokeObjectURL(customBgPreview)
+                            setCustomBgPreview(null)
+                            if (bgFileInputRef.current) bgFileInputRef.current.value = ''
+                          }}
+                        >
+                          <X className="w-3.5 h-3.5" />
+                        </Button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div>
+                      <input
+                        ref={bgFileInputRef}
+                        type="file"
+                        accept="image/jpeg,image/png,image/webp,video/mp4,video/webm"
+                        className="hidden"
+                        onChange={(e) => {
+                          const file = e.target.files?.[0]
+                          if (!file) return
+                          if (file.size > 50 * 1024 * 1024) {
+                            toast.error('File quá lớn (tối đa 50MB)')
+                            return
+                          }
+                          setCustomBgFile(file)
+                          setCustomBgPreview(URL.createObjectURL(file))
+                          toast.success(`Đã chọn: ${file.name}`)
+                        }}
+                      />
+                      <Button
+                        variant="outline"
+                        className="w-full gap-2 border-dashed border-primary/30 hover:bg-primary/5"
+                        onClick={() => bgFileInputRef.current?.click()}
+                      >
+                        <Upload className="w-4 h-4" />
+                        Chọn ảnh hoặc video nền
+                      </Button>
+                    </div>
+                  )}
                 </div>
               </AccordionContent>
             </AccordionItem>

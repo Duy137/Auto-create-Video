@@ -2,10 +2,12 @@
  * AnimatedBackground — gradient preset + floating particles + vignette.
  * Renders behind all scene content in AutoClipVideo root.
  * Deterministic — no Math.random().
+ *
+ * [CryptoVN Custom] — Supports customBackgroundUrl to override gradient.
  */
 
 import React from "react";
-import { AbsoluteFill, useCurrentFrame } from "remotion";
+import { AbsoluteFill, Img, Loop, OffthreadVideo, staticFile, useCurrentFrame, useVideoConfig } from "remotion";
 import { FloatingParticles } from "./FloatingParticles";
 
 // ── 12 curated gradient presets by topic ──
@@ -53,18 +55,32 @@ export const TOPIC_PRESET_MAP: Record<string, string> = {
   default: "steel_blue",
 };
 
+// [CryptoVN Custom] — Resolve custom background URL
+function resolveCustomBgUrl(url: string): string {
+  if (url.startsWith("http://") || url.startsWith("https://")) return url;
+  if (url.startsWith("assets/") || url.startsWith("public/")) return staticFile(url.replace(/^public\//, ""));
+  return url;
+}
+
 interface AnimatedBackgroundProps {
   preset?: string;
   primaryColor: string;
   secondaryColor: string;
+  customBackgroundUrl?: string | null;
+  customBackgroundType?: "image" | "video";
+  customBackgroundDurationSec?: number | null;
 }
 
 export const AnimatedBackground: React.FC<AnimatedBackgroundProps> = ({
   preset = "steel_blue",
   primaryColor,
   secondaryColor,
+  customBackgroundUrl,
+  customBackgroundType = "image",
+  customBackgroundDurationSec,
 }) => {
   const frame = useCurrentFrame();
+  const { fps } = useVideoConfig();
 
   const gradientBg = GRADIENT_PRESETS[preset] || GRADIENT_PRESETS.steel_blue;
 
@@ -72,17 +88,42 @@ export const AnimatedBackground: React.FC<AnimatedBackgroundProps> = ({
   const orbX = 50 + Math.sin(frame * 0.008) * 20;
   const orbY = 50 + Math.cos(frame * 0.006) * 25;
 
+  // [CryptoVN Custom] — Resolve custom background
+  const hasCustomBg = !!customBackgroundUrl;
+
   return (
     <AbsoluteFill style={{ overflow: "hidden" }}>
       {/* Layer 1: Base gradient */}
       <AbsoluteFill style={{ background: gradientBg }} />
 
+      {/* [CryptoVN Custom] Layer 1b: Custom background override */}
+      {hasCustomBg && (
+        <AbsoluteFill>
+          {customBackgroundType === "video" ? (
+            <Loop durationInFrames={Math.max(1, Math.ceil((customBackgroundDurationSec || 30) * fps))}>
+              <OffthreadVideo
+                src={resolveCustomBgUrl(customBackgroundUrl!)}
+                muted
+                style={{ width: "100%", height: "100%", objectFit: "cover" }}
+              />
+            </Loop>
+          ) : (
+            <Img
+              src={resolveCustomBgUrl(customBackgroundUrl!)}
+              style={{ width: "100%", height: "100%", objectFit: "cover" }}
+            />
+          )}
+        </AbsoluteFill>
+      )}
+
       {/* Layer 2: Slow-moving color orb */}
-      <AbsoluteFill
-        style={{
-          background: `radial-gradient(circle at ${orbX}% ${orbY}%, ${primaryColor}08 0%, transparent 50%)`,
-        }}
-      />
+      {!hasCustomBg && (
+        <AbsoluteFill
+          style={{
+            background: `radial-gradient(circle at ${orbX}% ${orbY}%, ${primaryColor}08 0%, transparent 50%)`,
+          }}
+        />
+      )}
 
       {/* Layer 3: Floating particles */}
       <FloatingParticles
@@ -94,7 +135,7 @@ export const AnimatedBackground: React.FC<AnimatedBackgroundProps> = ({
       <AbsoluteFill
         style={{
           background:
-            "radial-gradient(ellipse at center, transparent 40%, rgba(0,0,0,0.4) 100%)",
+            `radial-gradient(ellipse at center, transparent 40%, rgba(0,0,0,${hasCustomBg ? 0.6 : 0.4}) 100%)`,
         }}
       />
 

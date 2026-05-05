@@ -704,6 +704,10 @@ def _build_video_settings(user_settings: dict | None) -> VideoSettings:
         bgm_url=user_settings.get("bgm_url"),
         bgm_volume=user_settings.get("bgm_volume", 0.2),
         subtitle=subtitle,
+        # [CryptoVN Custom] Custom background
+        custom_background_url=user_settings.get("custom_background_url"),
+        custom_background_type=user_settings.get("custom_background_type", "image"),
+        custom_background_duration_sec=user_settings.get("custom_background_duration_sec"),
     )
 
 

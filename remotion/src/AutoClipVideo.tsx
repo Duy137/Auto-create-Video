@@ -264,6 +264,13 @@ export const AutoClipVideo: React.FC<AutoClipVideoProps> = (rawProps) => {
     settings,
   } = props;
 
+  // [CryptoVN Custom] When custom background is set, make scene backgrounds
+  // transparent so AnimatedBackground (Layer 0) shows through.
+  const hasCustomBg = !!settings.customBackgroundUrl;
+  const effectivePalette = hasCustomBg
+    ? { ...colorPalette, background: "transparent" }
+    : colorPalette;
+
   return (
     <AbsoluteFill>
       {/* Layer 0: Animated background */}
@@ -271,6 +278,9 @@ export const AutoClipVideo: React.FC<AutoClipVideoProps> = (rawProps) => {
         preset={settings.backgroundPreset ?? "steel_blue"}
         primaryColor={colorPalette.primary}
         secondaryColor={colorPalette.secondary}
+        customBackgroundUrl={settings.customBackgroundUrl}
+        customBackgroundType={settings.customBackgroundType}
+        customBackgroundDurationSec={settings.customBackgroundDurationSec}
       />
       {/* Layer 1: Scene sequences with transitions */}
       <TransitionSeries>
@@ -301,7 +311,7 @@ export const AutoClipVideo: React.FC<AutoClipVideoProps> = (rawProps) => {
               <TransitionSeries.Sequence durationInFrames={compensatedDuration}>
                 <SceneWithEntryMotion
                   scene={scene}
-                  colorPalette={colorPalette}
+                  colorPalette={effectivePalette}
                   wordTimestamps={props.wordTimestamps}
                   sequenceDurationFrames={compensatedDuration}
                   outgoingTransitionName={hasTransition ? nextTransitionName : "none"}
@@ -343,7 +353,6 @@ export const AutoClipVideo: React.FC<AutoClipVideoProps> = (rawProps) => {
                     <OffthreadVideo
                       src={resolveAssetUrl(settings.cta.mediaUrl!)}
                       style={{ width: "100%", height: "100%", objectFit: "contain" }}
-                      muted
                     />
                   ) : (
                     <Img
@@ -400,7 +409,7 @@ export const AutoClipVideo: React.FC<AutoClipVideoProps> = (rawProps) => {
         <Watermark
           text={settings.watermarkText ?? ""}
           color={colorPalette.primary}
-          position={settings.watermarkPosition ?? "bottom-right"}
+          position={settings.watermarkPosition ?? "top-right"}
           opacity={settings.watermarkOpacity ?? 0.5}
           logoUrl={settings.watermarkLogoUrl}
           mode={settings.watermarkMode ?? "text"}

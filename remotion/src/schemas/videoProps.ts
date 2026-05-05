@@ -186,7 +186,7 @@ const SettingsSchema = z.object({
   watermarkText: z.string().nullable().optional(),
   watermarkPosition: z.enum([
     "top-left", "top-right", "bottom-left", "bottom-right", "center",
-  ]).optional().default("bottom-right"),
+  ]).optional().default("top-right"),
   watermarkOpacity: z.number().min(0.1).max(1).optional().default(0.5),
   watermarkLogoUrl: z.string().nullable().optional().default(null),
   watermarkMode: z.enum(["text", "logo", "both"]).optional().default("text"),
@@ -202,6 +202,9 @@ const SettingsSchema = z.object({
     durationMs: z.number().default(3000),
   }).optional().default({ enabled: false, mediaUrl: null, mediaType: "video", durationMs: 3000 }),
   backgroundPreset: z.string().optional().default("steel_blue"),
+  customBackgroundUrl: z.string().nullable().optional().default(null),
+  customBackgroundType: z.enum(["image", "video"]).optional().default("image"),
+  customBackgroundDurationSec: z.number().nullable().optional().default(null),
 });
 
 // ══════════════════════════════════════════════

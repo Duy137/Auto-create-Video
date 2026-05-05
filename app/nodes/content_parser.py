@@ -159,10 +159,10 @@ RULES:
     Each event: label (max 10 chars, e.g. year or step number), title (max 20 chars), optional description (max 40 chars).
     ALL text (title, description) MUST be in the SAME language as the narration. Labels like years/numbers stay as-is.
     Extract timeline info from narration — do NOT invent facts.
-12. media_layout: ONLY for scenes with scene_type="media_showcase". Choose "cinema" (default, video in rounded frame), "fullscreen" (video fills entire screen), or "fit" (video/image fits width, letterbox background — use for wide/landscape media).
+12. media_layout: ONLY for scenes with scene_type="media_showcase". Choose "fit" (default, video/image fits width, letterbox background — use for wide/landscape media), "cinema" (video in rounded frame), or "fullscreen" (video fills entire screen).
 
 For card_items, stats, diagram_spec, comparison_sides, timeline_events: set to null if the scene_type doesn't match.
-For media_layout: set to "cinema" if the scene_type is not "media_showcase".
+For media_layout: set to "fit" if the scene_type is not "media_showcase".
 
 13. title_lines: ONLY for scenes with scene_type="title_card". Split the narration into 2-4 display lines.
     Each line: { "text": "...", "style": "normal" | "highlight" | "accent" }.
@@ -833,7 +833,7 @@ def _merge_phases(
             # New scene type data (from Enricher)
             "comparison_sides": e.get("comparison_sides"),
             "timeline_events": e.get("timeline_events"),
-            "media_layout": e.get("media_layout", "cinema"),
+            "media_layout": e.get("media_layout", "fit"),
             # TitleCard redesign fields (from Enricher)
             "title_lines": e.get("title_lines"),
             "top_badge": e.get("top_badge"),
