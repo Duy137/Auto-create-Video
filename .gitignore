@@ -11,6 +11,8 @@ build/
 *.egg-info/
 .pytest_cache/
 .mypy_cache/
+data/*.db
+output/
 
 # Node.js
 node_modules/
@@ -36,3 +38,25 @@ data/
 *.db
 *.db-journal
 *.db-wal
+
+# Code analysis (fallow, vulture, radon, ruff)
+.analysis/
+.fallow/
+
+# IDEs and editors
+.vscode/
+
+.logs/
+logs/
+
+# Claude Code worktrees
+.claude/worktrees/
+
+visualize_graph.py
+graph_diagram.mmd
+graph_diagram.png
+
+.clinerules
+
+# Debugging scripts
+debug_scripts/

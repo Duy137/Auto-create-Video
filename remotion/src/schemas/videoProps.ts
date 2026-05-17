@@ -65,13 +65,22 @@ const TimelineEventSchema = z.object({
   description: z.string().max(40).nullable().optional(),
 });
 
-// ── Story Beat (for Story Beats fallback scene) ──  [CryptoVN Custom]
+// ── Story Beat (for story_beats scene — audit fallback) ──
 
 const StoryBeatSchema = z.object({
   text: z.string(),
-  emoji: z.string().default("✨"),
-  startMs: z.number().nonnegative().default(0),
-  endMs: z.number().nonnegative().default(0),
+  emoji: z.string(),
+  startMs: z.number().nonnegative(),
+  endMs: z.number().nonnegative(),
+});
+
+const SceneAuditSchema = z.object({
+  passed: z.boolean(),
+  signals: z.array(z.string()).default([]),
+  confidence: z.number().optional(),
+  minConfidence: z.number().optional(),
+  ruleDetails: z.record(z.string(), z.unknown()).optional(),
+  suggestedFallback: z.string().optional(),
 });
 
 // ── Scene Data ──
@@ -88,15 +97,36 @@ const SceneSchema = z.object({
     "comparison",
     "media_showcase",
     "timeline",
-    "news_intro",
-    "story_beats",  // [CryptoVN Custom]
+    "story_beats",
+    "cryptovn101_news",
   ]),
   narration: z.string(),
 
   // Director agent outputs (Phase 1)
   transition: z.enum(["fade", "slide", "wipe", "none", "zoom", "flip", "clock-wipe", "iris"]).optional().default("fade"),
   purpose: z.enum(["hook", "explain", "list_steps", "data_visual", "compare", "conclude"]).optional(),
-  layout: z.enum(["center_focus", "vertical_stack", "media_overlay", "horizontal_grid", "grid_2x2"]).optional().default("center_focus"),
+  layout: z.enum([
+    // Legacy / shared
+    "center_focus", "vertical_stack", "media_overlay", "grid_2x2",
+    // Backward compat (deprecated, will fallback)
+    "horizontal_grid",
+    // Timeline modes
+    "left_aligned",
+    // InfoCard modes
+    "full_width_cards",
+    // Comparison modes
+    "split_screen", "stacked",
+    // StatsHighlight modes
+    "hero_number",
+    // EmojiGrid modes
+    "icon_showcase",
+    // StoryBeats modes
+    "card_beats",
+    // MediaShowcase modes (migrated from mediaLayout)
+    "cinema", "fullscreen", "fit",
+    // TitleCard modes
+    "news_intro", "educational", "tutorial", "commercial",
+  ]).optional().default("center_focus"),
   visualDescription: z.string(),
 
   // Timing (computed from audio word timestamps)
@@ -157,8 +187,11 @@ const SceneSchema = z.object({
   // Emoji pop-up (optional, LLM-generated)
   emoji: z.string().optional().nullable(),
 
-  // Story Beats fallback data (optional)  [CryptoVN Custom]
-  storyBeats: z.array(StoryBeatSchema).optional().nullable(),
+  // Story Beats fallback (populated when sceneType === "story_beats")
+  storyBeats: z.array(StoryBeatSchema).max(5).nullable().optional(),
+
+  // Rerank audit metadata (used by Review UI, ignored by render logic)
+  audit: SceneAuditSchema.nullable().optional(),
 });
 
 // ── Subtitle Settings ──
@@ -178,7 +211,7 @@ const SubtitleSettingsSchema = z.object({
 // ── Video Settings ──
 
 const SettingsSchema = z.object({
-  aspectRatio: z.enum(["9:16", "16:9"]),
+  aspectRatio: z.enum(["9:16", "16:9", "1:1"]),
   fps: z.number().int().default(30),
   transitionMode: z.enum(["none", "crossfade", "fade_to_black"]),
   bgmUrl: z.string().nullable(),
@@ -204,7 +237,6 @@ const SettingsSchema = z.object({
   backgroundPreset: z.string().optional().default("steel_blue"),
   customBackgroundUrl: z.string().nullable().optional().default(null),
   customBackgroundType: z.enum(["image", "video"]).optional().default("image"),
-  customBackgroundDurationSec: z.number().nullable().optional().default(null),
 });
 
 // ══════════════════════════════════════════════
@@ -214,16 +246,19 @@ const SettingsSchema = z.object({
 export const VideoPropsSchema = z.object({
   jobId: z.string(),
   title: z.string(),
+  brandName: z.string().nullable().optional(),
+  brandLogoUrl: z.string().nullable().optional(),
   colorPalette: ColorPaletteSchema,
   audioUrl: z.string(),
   wordTimestamps: z.array(WordTimestampSchema),
   scenes: z.array(SceneSchema),
+  width: z.number().int().positive().default(1080),
+  height: z.number().int().positive().default(1920),
   settings: SettingsSchema,
 });
 
 export type VideoProps = z.infer<typeof VideoPropsSchema>;
 export type SceneData = z.infer<typeof SceneSchema>;
-export type StoryBeat = z.infer<typeof StoryBeatSchema>;  // [CryptoVN Custom]
 
 // Re-export sub-schemas for use in components
 export {
@@ -233,4 +268,7 @@ export {
   SubtitleSettingsSchema,
   SettingsSchema,
   DiagramSpecSchema,
+  StoryBeatSchema,
 };
+
+export type StoryBeat = z.infer<typeof StoryBeatSchema>;

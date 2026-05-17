@@ -14,6 +14,10 @@ from pathlib import Path
 
 from loguru import logger
 
+from app.pipeline.graph import run_agentic_pipeline_from_text
+from app.state import AgentJobSettings
+from config import OUTPUT_DIR
+
 
 def main():
     parser = argparse.ArgumentParser(
@@ -60,19 +64,25 @@ def main():
     logger.info("Input: {} characters, ~{} words", len(text), len(text.split()))
     logger.info("Voice: {}, Rate: {}", args.voice, args.rate)
 
-    # Run pipeline
-    from app.orchestrator import run_pipeline
-
     try:
-        output_path = asyncio.run(
-            run_pipeline(
+        state = asyncio.run(
+            run_agentic_pipeline_from_text(
                 text,
+                user_id=0,
                 job_id=args.job_id,
-                voice=args.voice,
-                rate=args.rate,
+                settings=AgentJobSettings(
+                    voice=args.voice,
+                    speech_rate=args.rate,
+                ),
                 skip_render=args.skip_render,
             )
         )
+
+        if args.skip_render:
+            output_path = Path(OUTPUT_DIR) / state.job_id / "video_props.json"
+        else:
+            output_path = Path(state.final_mp4_path or (Path(OUTPUT_DIR) / state.job_id / "final.mp4"))
+
         logger.info("✅ Done! Output: {}", output_path)
     except KeyboardInterrupt:
         logger.warning("Interrupted by user")

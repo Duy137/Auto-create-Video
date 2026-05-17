@@ -5,27 +5,33 @@
  * IMPORTANT: No Math.random() — Remotion requires deterministic rendering.
  * Uses golden-angle distribution for pseudo-random but reproducible positions.
  *
- * Currently used only by TitleCard for ambient background interest.
+ * Used by TitleCard and AnimatedGradientBg for ambient background interest.
  */
 
 import React from "react";
 import { AbsoluteFill, useCurrentFrame } from "remotion";
 
-const PARTICLE_COUNT = 20;
+const DEFAULT_PARTICLE_COUNT = 20;
 
 interface FloatingParticlesProps {
   primaryColor: string;
   secondaryColor: string;
+  /** Number of particles to render (default: 20) */
+  density?: number;
+  /** Base opacity multiplier (default: 1.0, range 0-1) */
+  baseOpacity?: number;
 }
 
 export const FloatingParticles: React.FC<FloatingParticlesProps> = ({
   primaryColor,
   secondaryColor,
+  density = DEFAULT_PARTICLE_COUNT,
+  baseOpacity = 1.0,
 }) => {
   const frame = useCurrentFrame();
 
   // Deterministic particle properties (golden-angle distribution)
-  const particles = Array.from({ length: PARTICLE_COUNT }, (_, i) => ({
+  const particles = Array.from({ length: density }, (_, i) => ({
     x: (i * 137.508) % 100,
     y: (i * 91.1) % 100,
     size: 2 + (i % 7) * 3,
@@ -60,7 +66,7 @@ export const FloatingParticles: React.FC<FloatingParticlesProps> = ({
               height: p.size,
               borderRadius: "50%",
               backgroundColor: particleColor,
-              opacity: Math.max(0.05, Math.min(0.25, opacityPulse)),
+              opacity: Math.max(0.05, Math.min(0.25, opacityPulse)) * baseOpacity,
               filter: `blur(${p.blur}px)`,
               boxShadow: `0 0 ${8 + p.blur * 2}px ${particleColor}`,
             }}

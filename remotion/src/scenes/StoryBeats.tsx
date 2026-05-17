@@ -1,19 +1,17 @@
 // remotion/src/scenes/StoryBeats.tsx
 /**
- * StoryBeats scene — Concept D fallback for failed-audit scenes.
+ * StoryBeats scene — card_beats layout (card-based with step indicators).
  *
- * When Pexels returns no fitting media, the backend decomposes the
- * scene's narration into 2–5 "beats" (text + emoji) and renders
- * them as a vertical stack-up timeline:
+ * Fallback for failed-audit scenes. Decomposes narration into 2–5 beats
+ * (text + emoji) rendered as GlassCard containers.
  *
- *   - Past beats: stacked at top, faded + scaled down
- *   - Current beat: centered, scale 1.05, glow effect
- *   - Future beats: hidden
- *
- * Visual is consistent with the rest of the video (uses colorPalette,
- * Noto Sans VN font) but renders entirely without external media.
- *
- * [CryptoVN Custom] Cherry-picked from upstream A20-App-160.
+ * Features:
+ *   - Each beat in a GlassCard with step indicator (1/5, 2/5, etc.)
+ *   - Current beat: active glow + left accent border
+ *   - Past beats: faded + scaled down
+ *   - AnimatedGradientBg for depth
+ *   - Word-by-word reveal for current beat
+ *   - Progress bar with rounded ends + glow
  */
 
 import React from "react";
@@ -27,6 +25,8 @@ import {
 import type { SceneData, VideoProps, StoryBeat } from "../schemas/videoProps";
 import { fontFamily } from "../lib/fonts";
 import { useExitAnimation } from "../lib/useExitAnimation";
+import { AnimatedGradientBg } from "../components/AnimatedGradientBg";
+import { GlassCard } from "../components/GlassCard";
 
 interface StoryBeatsProps {
   scene: SceneData;
@@ -34,15 +34,12 @@ interface StoryBeatsProps {
   wordTimestamps?: { text: string; startMs: number; endMs: number }[];
 }
 
-const BEAT_HEIGHT = 200;
-const BEAT_GAP = 28;
-const STACK_TOP_PADDING = 200;
+// ── Single Beat Card ──
 
-// ── Single beat row ──
-
-const SingleBeat: React.FC<{
+const BeatCard: React.FC<{
   beat: StoryBeat;
   index: number;
+  totalBeats: number;
   currentBeatIndex: number;
   colorPalette: VideoProps["colorPalette"];
   frame: number;
@@ -52,6 +49,7 @@ const SingleBeat: React.FC<{
 }> = ({
   beat,
   index,
+  totalBeats,
   currentBeatIndex,
   colorPalette,
   frame,
@@ -69,62 +67,44 @@ const SingleBeat: React.FC<{
     Math.round(((beat.startMs - sceneStartMs) / 1000) * fps),
   );
 
-  // Spring-driven entrance for the current beat
+  // Spring entrance
   const entranceProgress = spring({
     frame: Math.max(0, frame - beatStartFrame),
     fps,
-    config: { damping: 18, stiffness: 130, mass: 0.5 },
+    config: { damping: 16, stiffness: 120, mass: 0.5 },
   });
 
-  // Visual state per beat
+  // Visual state
   let opacity: number;
   let scale: number;
   let yOffset: number;
-  let xOffset: number;
-  let glowIntensity: number;
 
   if (isFuture) {
     opacity = 0;
-    scale = 0.9;
-    yOffset = 50;
-    xOffset = -80;
-    glowIntensity = 0;
+    scale = 0.92;
+    yOffset = 30;
   } else if (isCurrent) {
     opacity = interpolate(entranceProgress, [0, 1], [0, 1], {
       extrapolateLeft: "clamp",
       extrapolateRight: "clamp",
     });
-    scale = interpolate(entranceProgress, [0, 1], [0.85, 1.05], {
+    scale = interpolate(entranceProgress, [0, 1], [0.9, 1], {
       extrapolateLeft: "clamp",
       extrapolateRight: "clamp",
     });
-    yOffset = interpolate(entranceProgress, [0, 1], [40, 0], {
+    yOffset = interpolate(entranceProgress, [0, 1], [20, 0], {
       extrapolateLeft: "clamp",
       extrapolateRight: "clamp",
     });
-    xOffset = interpolate(entranceProgress, [0, 1], [-100, 0], {
-      extrapolateLeft: "clamp",
-      extrapolateRight: "clamp",
-    });
-    // Gentle pulse: amplitude 0.1 around 0.4 baseline
-    glowIntensity = 0.4 + Math.sin(frame / 8) * 0.1;
   } else {
-    // Past beat — fade based on how far back
+    // Past beat
     const distance = currentBeatIndex - index;
-    opacity = Math.max(0.25, 0.7 - distance * 0.15);
-    scale = Math.max(0.75, 0.95 - distance * 0.05);
+    opacity = Math.max(0.3, 0.7 - distance * 0.12);
+    scale = Math.max(0.85, 0.95 - distance * 0.03);
     yOffset = 0;
-    xOffset = 0;
-    glowIntensity = 0;
   }
 
-  // Convert glowIntensity (0..0.6) to hex alpha (00..FF)
-  const glowAlpha = Math.max(0, Math.min(255, Math.round(glowIntensity * 255)));
-  const glowAlphaHex = glowAlpha < 16
-    ? `0${glowAlpha.toString(16)}`
-    : glowAlpha.toString(16);
-
-  // Word-by-word reveal while the beat is active.
+  // Word-by-word reveal
   const words = beat.text.split(/\s+/).filter(Boolean);
   const beatDuration = Math.max(1, beat.endMs - beat.startMs);
   const revealProgress = isPast
@@ -137,75 +117,93 @@ const SingleBeat: React.FC<{
     : Math.max(1, Math.ceil(words.length * revealProgress));
   const revealText = isFuture ? "" : words.slice(0, revealCount).join(" ");
 
-  // Position: stacked from top
-  const baseTop = index * (BEAT_HEIGHT + BEAT_GAP);
-
   return (
     <div
       style={{
-        position: "absolute",
-        top: baseTop + yOffset,
-        left: 60,
-        right: 60,
-        height: BEAT_HEIGHT,
-        display: "flex",
-        alignItems: "center",
-        gap: 24,
         opacity,
-        transform: `translateX(${xOffset}px) scale(${scale})`,
+        transform: `translateY(${yOffset}px) scale(${scale})`,
         transformOrigin: "left center",
+        marginBottom: 16,
       }}
     >
-      {/* Emoji */}
-      <div
-        style={{
-          fontSize: isCurrent ? 100 : 72,
-          lineHeight: 1,
-          flexShrink: 0,
-          filter: isCurrent
-            ? `drop-shadow(0 0 24px ${colorPalette.primary}${glowAlphaHex})`
-            : "none",
-        }}
+      <GlassCard
+        active={isCurrent}
+        glowColor={colorPalette.primary}
+        accentSide={isCurrent ? "left" : "none"}
+        accentColors={[colorPalette.primary, colorPalette.secondary]}
+        padding={20}
+        borderRadius={16}
       >
-        {beat.emoji}
-      </div>
+        <div style={{ display: "flex", alignItems: "flex-start", gap: 16 }}>
+          {/* Emoji */}
+          <div
+            style={{
+              fontSize: isCurrent ? 52 : 40,
+              lineHeight: 1,
+              flexShrink: 0,
+              filter: isCurrent
+                ? `drop-shadow(0 0 12px ${colorPalette.primary}50)`
+                : "none",
+            }}
+          >
+            {beat.emoji}
+          </div>
 
-      {/* Text */}
-      <div
-        style={{
-          flex: 1,
-          fontFamily,
-          fontSize: isCurrent ? 56 : 40,
-          fontWeight: isCurrent ? 800 : 600,
-          color: isCurrent ? colorPalette.text : `${colorPalette.text}99`,
-          lineHeight: 1.25,
-          overflow: "hidden",
-          display: "-webkit-box",
-          WebkitLineClamp: 3,
-          WebkitBoxOrient: "vertical",
-        }}
-      >
-        {revealText}
-      </div>
+          {/* Content */}
+          <div style={{ flex: 1, minWidth: 0 }}>
+            {/* Step indicator */}
+            <div
+              style={{
+                fontFamily,
+                fontSize: 12,
+                fontWeight: 700,
+                color: isCurrent ? colorPalette.primary : `${colorPalette.text}50`,
+                letterSpacing: 2,
+                textTransform: "uppercase",
+                marginBottom: 6,
+              }}
+            >
+              {index + 1}/{totalBeats}
+            </div>
+
+            {/* Text */}
+            <div
+              style={{
+                fontFamily,
+                fontSize: isCurrent ? 26 : 22,
+                fontWeight: isCurrent ? 700 : 500,
+                color: isCurrent ? colorPalette.text : `${colorPalette.text}90`,
+                lineHeight: 1.35,
+                overflow: "hidden",
+                display: "-webkit-box",
+                WebkitLineClamp: 3,
+                WebkitBoxOrient: "vertical",
+              }}
+            >
+              {revealText}
+            </div>
+          </div>
+        </div>
+      </GlassCard>
     </div>
   );
 };
 
-// ── Main component ──
+// ── Main Component ──
 
 export const StoryBeats: React.FC<StoryBeatsProps> = ({
   scene,
   colorPalette,
 }) => {
   const frame = useCurrentFrame();
-  const { fps } = useVideoConfig();
+  const { fps, height } = useVideoConfig();
   const exitOpacity = useExitAnimation();
 
   const beats: StoryBeat[] = scene.storyBeats ?? [];
   const sceneStartMs = scene.startMs;
   const sceneEndMs = scene.endMs;
 
-  // Determine current beat based on elapsed time inside scene
+  // Determine current beat
   const currentMs = sceneStartMs + (frame / fps) * 1000;
   let currentBeatIndex = -1;
   for (let i = 0; i < beats.length; i++) {
@@ -220,7 +218,7 @@ export const StoryBeats: React.FC<StoryBeatsProps> = ({
     currentBeatIndex = currentMs < beats[0].startMs ? 0 : beats.length - 1;
   }
 
-  // Progress bar progress (0..1)
+  // Progress (0..1)
   const totalDuration = Math.max(1, sceneEndMs - sceneStartMs);
   const progress = Math.min(
     1,
@@ -232,57 +230,71 @@ export const StoryBeats: React.FC<StoryBeatsProps> = ({
     extrapolateRight: "clamp",
   });
 
-  // Empty-beat fallback: render scene title only
+  // Empty-beat fallback
   if (beats.length === 0) {
     return (
-      <AbsoluteFill
-        style={{
-          background: `linear-gradient(180deg, ${colorPalette.primary}20 0%, ${colorPalette.background} 50%, ${colorPalette.secondary}20 100%)`,
-          opacity: exitOpacity,
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          padding: 80,
-        }}
-      >
+      <AbsoluteFill style={{ opacity: exitOpacity }}>
+        <AnimatedGradientBg
+          colorPalette={colorPalette}
+          intensity="normal"
+          withParticles={true}
+        />
         <div
           style={{
-            fontFamily,
-            fontSize: 64,
-            fontWeight: 800,
-            color: colorPalette.text,
-            textAlign: "center",
-            opacity: headerOpacity,
+            position: "absolute",
+            inset: 0,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: 80,
           }}
         >
-          {scene.narration || scene.visualDescription}
+          <div
+            style={{
+              fontFamily,
+              fontSize: 48,
+              fontWeight: 800,
+              color: colorPalette.text,
+              textAlign: "center",
+              opacity: headerOpacity,
+              textShadow: "0 2px 12px rgba(0,0,0,0.4)",
+            }}
+          >
+            {scene.narration || scene.visualDescription}
+          </div>
         </div>
       </AbsoluteFill>
     );
   }
 
+  const stackTop = Math.round(height * 0.10);
+
   return (
-    <AbsoluteFill
-      style={{
-        background: `linear-gradient(180deg, ${colorPalette.primary}15 0%, ${colorPalette.background} 50%, ${colorPalette.secondary}15 100%)`,
-        opacity: exitOpacity,
-      }}
-    >
-      {/* Beats stack */}
+    <AbsoluteFill style={{ opacity: exitOpacity }}>
+      {/* Animated background */}
+      <AnimatedGradientBg
+        colorPalette={colorPalette}
+        intensity="subtle"
+        withParticles={true}
+        particleDensity={10}
+      />
+
+      {/* Beat cards stack */}
       <div
         style={{
           position: "absolute",
-          top: STACK_TOP_PADDING,
-          left: 0,
-          right: 0,
-          bottom: 200,
+          top: stackTop,
+          left: 40,
+          right: 40,
+          bottom: 120,
         }}
       >
         {beats.map((beat, i) => (
-          <SingleBeat
+          <BeatCard
             key={i}
             beat={beat}
             index={i}
+            totalBeats={beats.length}
             currentBeatIndex={currentBeatIndex}
             colorPalette={colorPalette}
             frame={frame}
@@ -293,16 +305,16 @@ export const StoryBeats: React.FC<StoryBeatsProps> = ({
         ))}
       </div>
 
-      {/* Progress bar at bottom */}
+      {/* Progress bar — rounded + glow */}
       <div
         style={{
           position: "absolute",
-          bottom: 100,
-          left: 60,
-          right: 60,
-          height: 4,
-          borderRadius: 2,
-          backgroundColor: `${colorPalette.text}20`,
+          bottom: 80,
+          left: 50,
+          right: 50,
+          height: 5,
+          borderRadius: 3,
+          backgroundColor: `${colorPalette.text}15`,
           overflow: "hidden",
         }}
       >
@@ -310,8 +322,9 @@ export const StoryBeats: React.FC<StoryBeatsProps> = ({
           style={{
             height: "100%",
             width: `${progress * 100}%`,
-            borderRadius: 2,
+            borderRadius: 3,
             background: `linear-gradient(90deg, ${colorPalette.primary}, ${colorPalette.secondary})`,
+            boxShadow: `0 0 10px ${colorPalette.primary}40`,
           }}
         />
       </div>

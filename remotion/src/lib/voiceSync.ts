@@ -83,7 +83,7 @@ export function getItemRevealFrames(
   const sceneDurationMs = sceneEndMs - sceneStartMs;
   const itemInterval = sceneDurationMs / items.length;
 
-  return items.map((item, i) => {
+  const rawFrames = items.map((item, i) => {
     const matchMs = findKeywordTimestamp(
       item.title,
       wordTimestamps,
@@ -96,4 +96,7 @@ export function getItemRevealFrames(
     // Fallback: evenly distributed
     return Math.round(((i * itemInterval) / 1000) * fps);
   });
+
+  // Ensure strict chronological order (top-to-bottom, left-to-right)
+  return rawFrames.sort((a, b) => a - b);
 }

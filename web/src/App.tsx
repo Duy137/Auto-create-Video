@@ -1,67 +1,58 @@
-import { Routes, Route, Navigate } from 'react-router-dom'
+import { Suspense, lazy, type ReactNode } from 'react'
+import { Routes, Route, Navigate, useLocation } from 'react-router-dom'
 import { useAuth } from '@/context/AuthContext'
 import { Toaster } from "@/components/ui/sonner"
+import { RequireRole } from '@/components/RequireRole'
+import { SystemErrorBoundary } from '@/components/SystemErrorBoundary'
 
 // Layouts
-import AuthenticatedLayout from '@/layouts/authenticated-layout'
-import UnauthenticatedLayout from '@/layouts/unauthenticated-layout'
+const AuthenticatedLayout = lazy(() => import('@/layouts/authenticated-layout'))
+const UnauthenticatedLayout = lazy(() => import('@/layouts/unauthenticated-layout'))
 
-// Temporary placeholders for pages until Phase 4
-// Using dynamic imports or just importing existing ones
-// NOTE: We need to rename existing pages to .tsx or create wrapper components
-import CreatePage from './pages/CreatePage'
-import LoginPage from './pages/LoginPage'
-import DashboardPage from './pages/DashboardPage'
+// Pages
+const CreatePage = lazy(() => import('./pages/CreatePage'))
+const DashboardPage = lazy(() => import('./pages/DashboardPage'))
+const SharePage = lazy(() => import('./pages/SharePage'))
 
-/**
- * Protected route wrapper — redirects to /login if not authenticated.
- */
-function ProtectedRoute({ children }: { children: React.ReactNode }) {
-  const { isAuthenticated, loading } = useAuth()
+const SettingsPage = lazy(() => import('./pages/SettingsPage'))
+const ReviewPage = lazy(() => import('./pages/ReviewPage'))
+const ResultPage = lazy(() => import('./pages/ResultPage'))
+const LibraryPage = lazy(() => import('./pages/LibraryPage'))
 
-  if (loading) {
-    return (
-      <div className="flex flex-1 items-center justify-center min-h-[60vh]">
-        <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
-      </div>
-    )
-  }
-
-  if (!isAuthenticated) {
-    return <Navigate to="/login" replace />
-  }
-
-  return children
+function RouteFallback() {
+  return (
+    <div className="flex flex-1 items-center justify-center min-h-[60vh]">
+      <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
+    </div>
+  )
 }
 
 export default function App() {
-  const { isAuthenticated, loading } = useAuth()
+  const location = useLocation()
 
   return (
     <>
-      <Routes>
-        {/* Public Routes */}
-        <Route element={<UnauthenticatedLayout />}>
-          <Route path="/login" element={
-            loading ? null :
-            isAuthenticated ? <Navigate to="/" replace /> : <LoginPage />
-          } />
-        </Route>
+      <Suspense fallback={<RouteFallback />}>
+        <SystemErrorBoundary resetKey={location.key || location.pathname}>
+          <Routes>
+            <Route path="/" element={<Navigate to="/dashboard" replace />} />
+            <Route path="/share/:token" element={<SharePage />} />
 
-        {/* Private Routes */}
-        <Route element={
-          <ProtectedRoute>
-            <AuthenticatedLayout />
-          </ProtectedRoute>
-        }>
-          <Route path="/" element={<CreatePage />} />
-          <Route path="/dashboard" element={<DashboardPage />} />
-          <Route path="/settings" element={<div className="p-4">Cài đặt (Coming soon)</div>} />
-        </Route>
+            <Route element={<AuthenticatedLayout />}>
+              <Route path="/create" element={<CreatePage />} />
+              <Route path="/dashboard" element={<DashboardPage />} />
+              <Route path="/review/:jobId" element={<ReviewPage />} />
+              <Route path="/result/:jobId" element={<ResultPage />} />
+              <Route path="/library" element={<LibraryPage />} />
+              <Route path="/profile" element={<Navigate to="/settings" replace />} />
+              <Route path="/settings" element={<SettingsPage />} />
+            </Route>
 
-        {/* Catch-all redirect */}
-        <Route path="*" element={<Navigate to="/" replace />} />
-      </Routes>
+            {/* Catch-all redirect */}
+            <Route path="*" element={<Navigate to="/" replace />} />
+          </Routes>
+        </SystemErrorBoundary>
+      </Suspense>
       <Toaster />
     </>
   )

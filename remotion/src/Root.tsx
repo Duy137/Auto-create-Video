@@ -238,7 +238,31 @@ const sampleProps: VideoProps = {
         { icon: "🎵", title: "Suno AI", subtitle: "Sáng tác nhạc AI" },
       ],
     },
+    {
+      sceneIndex: 8,
+      sceneType: "story_beats",
+      narration: "Triển khai AI agent chỉ trong vài ngày, tự động và an toàn.",
+      visualDescription: "Story Beats fallback example",
+      startMs: 27000,
+      endMs: 32000,
+      transition: "fade",
+      purpose: "explain",
+      layout: "vertical_stack",
+      imageQuery: null,
+      videoQuery: null,
+      mediaUrl: null,
+      mediaType: null,
+      keywordsToHighlight: ["AI", "agent", "an toàn"],
+      englishPhrases: [],
+      storyBeats: [
+        { text: "Triển khai AI agent", emoji: "🤖", startMs: 27000, endMs: 28800 },
+        { text: "chỉ trong vài ngày", emoji: "⚡", startMs: 28800, endMs: 30400 },
+        { text: "tự động và an toàn", emoji: "🛡️", startMs: 30400, endMs: 32000 },
+      ],
+    },
   ],
+  width: 1080,
+  height: 1920,
   settings: {
     aspectRatio: "9:16",
     fps: 30,
@@ -274,7 +298,6 @@ const sampleProps: VideoProps = {
     backgroundPreset: "steel_blue",
     customBackgroundUrl: null,
     customBackgroundType: "image",
-    customBackgroundDurationSec: null,
   },
 };
 
@@ -284,6 +307,18 @@ const previewDuration = calculateTimelineDurationInFrames(
   sampleProps.scenes,
   sampleProps.settings.fps
 );
+
+const getDimensionsFromAspectRatio = (aspectRatio?: string): { width: number; height: number } => {
+  switch (aspectRatio) {
+    case "16:9":
+      return { width: 1920, height: 1080 };
+    case "1:1":
+      return { width: 1080, height: 1080 };
+    case "9:16":
+    default:
+      return { width: 1080, height: 1920 };
+  }
+};
 
 export const RemotionRoot: React.FC = () => {
   return (
@@ -295,26 +330,35 @@ export const RemotionRoot: React.FC = () => {
         calculateMetadata={({ props }) => {
           const p = props as {
             scenes?: unknown;
-            settings?: { fps?: unknown };
+            settings?: unknown;
+            width?: unknown;
+            height?: unknown;
           };
+          const camelSettings = camelizeKeys(p.settings ?? {}) as {
+            fps?: number;
+            aspectRatio?: string;
+            cta?: { enabled?: boolean; mediaUrl?: string | null; durationMs?: number };
+          };
+          const fps = typeof camelSettings.fps === "number" ? camelSettings.fps : 30;
+          const dimensions =
+            typeof p.width === "number" && typeof p.height === "number"
+              ? { width: p.width, height: p.height }
+              : getDimensionsFromAspectRatio(camelSettings.aspectRatio);
+
           // Support both camelCase and snake_case (Python pipeline outputs snake_case)
           const rawScenes = Array.isArray(p.scenes) ? p.scenes : [];
           if (!rawScenes.length) {
             return {
               durationInFrames: previewDuration,
-              fps: 30,
-              width: 1080,
-              height: 1920,
+              fps,
+              width: dimensions.width,
+              height: dimensions.height,
             };
           }
-          const fps = typeof p.settings?.fps === "number" ? p.settings.fps : 30;
           const scenes = camelizeKeys(rawScenes) as VideoProps["scenes"];
           const durationInFrames = calculateTimelineDurationInFrames(scenes, fps);
 
           // CTA duration — must be added to total or CTA gets clipped
-          const camelSettings = camelizeKeys(p.settings ?? {}) as {
-            cta?: { enabled?: boolean; mediaUrl?: string | null; durationMs?: number };
-          };
           const ctaCfg = camelSettings.cta;
           const ctaDurationFrames =
             ctaCfg?.enabled && ctaCfg?.mediaUrl
@@ -328,13 +372,13 @@ export const RemotionRoot: React.FC = () => {
               30,
             ),
             fps,
-            width: 1080,
-            height: 1920,
+            width: dimensions.width,
+            height: dimensions.height,
           };
         }}
         fps={sampleProps.settings.fps}
-        width={1080}
-        height={1920}
+        width={sampleProps.width}
+        height={sampleProps.height}
         durationInFrames={previewDuration}
         defaultProps={sampleProps}
       />

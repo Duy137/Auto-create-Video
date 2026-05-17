@@ -30,7 +30,7 @@ interface MediaShowcaseProps {
 
 /** Resolve asset URL: local paths use staticFile(), remote URLs pass through */
 function resolveAssetUrl(url: string): string {
-  if (url.startsWith("http://") || url.startsWith("https://")) return url;
+  if (url.startsWith("http://") || url.startsWith("https://") || url.startsWith("/api/")) return url;
   return staticFile(url);
 }
 
@@ -39,9 +39,12 @@ export const MediaShowcase: React.FC<MediaShowcaseProps> = ({
   colorPalette,
 }) => {
   const frame = useCurrentFrame();
-  const { fps } = useVideoConfig();
+  const { fps, width, height } = useVideoConfig();
   const exitOpacity = useExitAnimation();
-  const layout = scene.mediaLayout ?? "cinema";
+  const MEDIA_LAYOUTS = new Set(["fit", "cinema", "fullscreen"]);
+  const layout = MEDIA_LAYOUTS.has(scene.layout ?? "")
+    ? (scene.layout as "fit" | "cinema" | "fullscreen")
+    : (scene.mediaLayout ?? "cinema");
   const sceneDurationFrames = Math.max(
     1,
     Math.round(((scene.endMs - scene.startMs) / 1000) * fps),
@@ -170,6 +173,17 @@ export const MediaShowcase: React.FC<MediaShowcaseProps> = ({
 
   // ── Cinema layout (default) ──
 
+  const sidePadding = Math.round(width * 0.04);
+  const titleTop = Math.round(height * 0.1);
+  const videoTop = Math.round(height * 0.23);
+  const mediaWidth = width - sidePadding * 2;
+  const mediaMaxHeight = Math.round(height * 0.66);
+  const mediaHeight = Math.min(mediaMaxHeight, Math.round(mediaWidth * 9 / 16));
+  const titleFontSize = Math.max(30, Math.round(width * 0.037));
+  const headerPadding = Math.round(width * 0.07);
+  const topGradientHeight = Math.round(height * 0.18);
+  const bottomGradientHeight = Math.round(height * 0.16);
+
   // Title slide-in
   const titleOpacity = interpolate(frame, [5, 20], [0, 1], {
     extrapolateLeft: "clamp",
@@ -204,7 +218,7 @@ export const MediaShowcase: React.FC<MediaShowcaseProps> = ({
           top: 0,
           left: 0,
           right: 0,
-          height: 300,
+          height: topGradientHeight,
           background: `linear-gradient(180deg, ${colorPalette.primary}15 0%, transparent 100%)`,
         }}
       />
@@ -213,11 +227,11 @@ export const MediaShowcase: React.FC<MediaShowcaseProps> = ({
       <div
         style={{
           position: "absolute",
-          top: 180,
+          top: titleTop,
           left: 0,
           right: 0,
           textAlign: "center",
-          padding: "0 80px",
+          padding: `0 ${headerPadding}px`,
           opacity: titleOpacity,
           transform: `translateY(${titleTranslateY}px)`,
         }}
@@ -225,12 +239,12 @@ export const MediaShowcase: React.FC<MediaShowcaseProps> = ({
         <h2
           style={{
             fontFamily,
-            fontSize: 40,
+            fontSize: titleFontSize,
             fontWeight: 800,
             color: colorPalette.text,
             margin: 0,
             lineHeight: 1.3,
-            maxHeight: 110,
+            maxHeight: Math.round(height * 0.12),
             overflow: "hidden",
             display: "-webkit-box",
             WebkitLineClamp: 2,
@@ -245,11 +259,10 @@ export const MediaShowcase: React.FC<MediaShowcaseProps> = ({
       <div
         style={{
           position: "absolute",
-          top: 360,
-          left: 40,
-          right: 40,
-          // 16:9 aspect: width=1000, height=562
-          height: 562,
+          top: videoTop,
+          left: sidePadding,
+          right: sidePadding,
+          height: mediaHeight,
           borderRadius: 16,
           overflow: "hidden",
           opacity: videoOpacity,
@@ -312,7 +325,7 @@ export const MediaShowcase: React.FC<MediaShowcaseProps> = ({
           bottom: 0,
           left: 0,
           right: 0,
-          height: 300,
+          height: bottomGradientHeight,
           background: `linear-gradient(0deg, ${colorPalette.background} 0%, transparent 100%)`,
         }}
       />

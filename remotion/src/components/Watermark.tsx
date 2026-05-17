@@ -39,7 +39,7 @@ const withHexAlpha = (hexColor: string, alpha: number): string => {
 };
 
 function resolveUrl(url: string): string {
-  if (url.startsWith("http://") || url.startsWith("https://")) return url;
+  if (url.startsWith("http://") || url.startsWith("https://") || url.startsWith("/api/")) return url;
   return staticFile(url);
 }
 

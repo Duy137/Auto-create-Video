@@ -200,7 +200,7 @@ async def _step_media_search(scenes: list[dict], job_dir: Path) -> list[dict]:
         # Only stock_background and media_showcase render external media.
         # Other types (title_card, info_card, stats_highlight, diagram,
         # emoji_grid, comparison, timeline) use gradient/animated backgrounds.
-        NEEDS_MEDIA = {"stock_background", "media_showcase", "news_intro"}  # [CryptoVN Custom] news_intro
+        NEEDS_MEDIA = {"stock_background", "media_showcase", "cryptovn101_news"}  # [CryptoVN Custom] cryptovn101_news
         if scene_type not in NEEDS_MEDIA:
             scene["media_url"] = None
             scene["media_type"] = None
@@ -791,7 +791,7 @@ async def run_pipeline(
     # ── Step 2D: Story Beats Fallback ──  [CryptoVN Custom]
     # After all media search + rerank, any scene that NEEDS media but still
     # has none gets auto-converted to "story_beats" type with emoji+text beats.
-    NEEDS_MEDIA_TYPES = {"stock_background", "media_showcase", "news_intro"}
+    NEEDS_MEDIA_TYPES = {"stock_background", "media_showcase", "cryptovn101_news"}
     failed_scenes = [
         s for s in scenes_with_media
         if s.get("scene_type") in NEEDS_MEDIA_TYPES and not s.get("media_url")

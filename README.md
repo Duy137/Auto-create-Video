@@ -1,190 +1,176 @@
-# AutoClip
+# 🎬 AutoClip — Local AI Video Generator
 
-AutoClip là hệ thống AI chuyển văn bản thành video ngắn dọc 9:16.
+> Biến văn bản thành video dọc viral chỉ trong vài giây ngay trên máy tính của bạn
 
-Đầu vào của hệ thống là một đoạn text tiếng Việt. Đầu ra là một video hoàn chỉnh gồm giọng đọc, timestamp từng từ, media minh hoạ theo scene và file JSON trung gian để Remotion render.
+---
 
-## Hệ Thống Làm Gì
+## 📋 Mục lục
 
-Pipeline hiện tại tập trung vào 4 việc chính:
+- [Mô tả dự án](#-mô-tả-dự-án)
+- [Tính năng chính](#-tính-năng-chính)
+- [Công nghệ sử dụng](#-công-nghệ-sử-dụng)
+- [Hướng dẫn cài đặt](#-hướng-dẫn-cài-đặt)
+- [Hướng dẫn chạy dự án](#-hướng-dẫn-chạy-dự-án)
+- [Cấu trúc thư mục](#-cấu-trúc-thư-mục)
 
-1. Phân tích nội dung văn bản thành các scene có thứ tự, mục đích và layout rõ ràng.
-2. Sinh audio TTS và căn chỉnh word-level timestamp để subtitle và timing scene bám sát lời đọc.
-3. Tìm media từ query ngữ nghĩa và tự động rerank bằng VLM trước khi đưa vào review/render.
-4. Kết xuất JSON contract thống nhất giữa Python và Remotion để render ra MP4.
+---
 
-## Luồng Xử Lý End-To-End
+## 📝 Mô tả dự án
 
-```text
-Raw Text
-	-> Input Validator
-	-> Content Parser (Splitter -> Director -> Enricher)
-	-> [TTS + Word Alignment] song song với [Media Search]
-	-> Scene Timing
-	-> VideoProps JSON
-	-> Asset Staging
-	-> Remotion Render
-	-> final.mp4
-```
+**AutoClip** là một công cụ local mạnh mẽ sử dụng AI để tự động chuyển đổi văn bản tiếng Việt thành video ngắn dọc (9:16) hoàn chỉnh — phù hợp để đăng lên TikTok, YouTube Shorts, Instagram Reels..
 
-Chi tiết từng bước:
+Người dùng chỉ cần nhập nội dung văn bản hoặc chủ đề, hệ thống sẽ tự động:
+- Phân tích và chia nội dung thành các cảnh (scenes)
+- Sinh giọng đọc AI (Text-to-Speech)
+- Tìm kiếm và ghép media minh hoạ phù hợp
+- Render ra video MP4 hoàn chỉnh với hiệu ứng chuyển cảnh, phụ đề và nhạc nền
 
-1. `input_validator` làm sạch input, kiểm tra độ dài và cảnh báo các trường hợp bất thường.
-2. `content_parser` chạy 3 phase:
-	 - Splitter chia scene nhưng phải giữ nội dung gốc theo thứ tự.
-	 - Director gán `scene_type`, `purpose`, `transition`, `layout`, `color_palette`.
-	 - Enricher tạo `visual_description`, query tìm ảnh/video, stats và dữ liệu hiển thị.
-3. `_step_tts()` preprocess narration theo từng scene, ghép thành `processed_full`, gọi TTS rồi align chính xác trên đúng text đã synthesize.
-4. `_step_media_search()` tìm media theo query cho từng scene; riêng luồng demo còn thu thập thêm top-k candidate để rerank.
-5. `_compute_scene_timing()` dùng `word_timestamps` và `processed_word_counts` để chia thời lượng scene đúng với audio thực tế.
-6. `VideoProps` được assemble, ghi ra `output/<job_id>/video_props.json`.
-7. Khi render, asset được copy sang thư mục public của Remotion và sinh `video_props_render.json`.
-8. Remotion render composition thành `output/<job_id>/final.mp4`.
+---
 
-## Hai Cách Chạy Hệ Thống
+## ✨ Tính năng chính
 
-### 1. CLI Pipeline
+| Tính năng | Mô tả |
+|-----------|-------|
+| ⚡ **Siêu Nhanh, Siêu Nhẹ** | Khởi động tức thì không cần cấu hình Docker hay Redis. |
+| 🤖 **AI Agentic Pipeline** | Hệ thống multi-agent với LangGraph điều phối các stage xử lý |
+| 📝 **Text-to-Video** | Nhập văn bản hoặc chủ đề → AI tự chia scene, chọn layout, tìm media |
+| 🎙️ **Multi-engine TTS** | Hỗ trợ 5 engine giọng đọc: OpenAI, Edge-TTS, ElevenLabs, Gemini, Vbee |
+| 🔍 **Smart Media Search** | Tìm media stock tự động + VLM Rerank bằng AI vision để chọn media phù hợp nhất |
+| 🎨 **Studio Editor** | Giao diện review 3 panel — chỉnh sửa scene, đổi media, tuỳ chỉnh màu sắc |
+| 📊 **Đa dạng Scene Type** | 8+ loại scene: info_card, stats_highlight, comparison, timeline, diagram... |
+| 🎵 **BGM & SFX** | Nhạc nền và hiệu ứng âm thanh tự động |
 
-- Entry point: `run_pipeline.py`
-- Dùng khi muốn chạy thẳng từ text sang JSON hoặc MP4.
-- Flow: validate -> parse -> TTS/media -> timing -> JSON -> render.
+---
 
-### 2. Modern Studio (Web App)
+## 🛠️ Công nghệ sử dụng
 
-- Backend: `api/main.py`
-- Frontend: `web/` (React + TypeScript + Vite + Shadcn UI)
-- Flow:
-	1. Login/Register qua JWT Auth.
-	2. Setup: Nhập text & tùy chỉnh TTS/BGM.
-	3. Processing: Xem AI pipeline chạy live qua SSE.
-	4. Review: Studio Editor 3-pane chuyên nghiệp để sửa scene, re-search media, đổi layout.
-	5. Render: Kết xuất MP4 từ các thiết lập đã review.
+### Frontend
+| Công nghệ | Vai trò |
+|-----------|---------|
+| React 18 + TypeScript | Framework UI chính |
+| Vite | Build tool & dev server |
+| Shadcn/UI + Radix | Component library |
+| TailwindCSS | Styling utility |
+| Remotion | Video rendering engine (React-based) |
 
-## Kiến Trúc Các Lớp
+### Backend
+| Công nghệ | Vai trò |
+|-----------|---------|
+| Python 3.13 | Ngôn ngữ backend |
+| FastAPI | Web framework (async) |
+| SQLAlchemy 2.0 | ORM & database (SQLite tự động cấu hình) |
+| Asyncio Queue | Xử lý background task in-process |
+| Pydantic v2 | Data validation & serialization |
 
-```text
-Entry Points
-	run_pipeline.py
-	api/main.py
-				|
-				v
-Orchestration Layer
-	app/orchestrator.py
-				|
-				v
-Node Layer (LangGraph Nodes)
-	input_validator
-	content_parser
-	tts_preprocessor
-	tts_synthesizer
-	word_aligner
-	media_searcher
-	media_reranker
-	video_renderer
-				|
-				v
-UI Layer (Modern Studio)
-	web/src/pages/CreatePage.tsx
-	web/src/sections/ReviewView.tsx
-	web/src/api/client.ts (Typed API)
-				|
-				v
-Contract Layer
-	app/state.py (Pydantic VideoProps)
-	remotion/src/schemas/videoProps.ts (Zod)
-				|
-				v
-Render Layer
-	remotion/src/* (React + CSS Animations)
-```
+---
 
-## Điểm Quan Trọng Của Kiến Trúc Hiện Tại
+## 📦 Hướng dẫn cài đặt
 
-### 1. Text-Scene Alignment Là Trục Chính
+### Yêu cầu hệ thống
 
-- Splitter phải giữ nội dung gốc đủ chặt để scene không bị paraphrase quá mức.
-- TTS không align trên raw narration nữa, mà align trên đúng `processed_text` đã dùng để synthesize.
-- Timing scene dùng `processed_word_counts` theo từng scene để tránh lệch khi text bị biến đổi bởi bước preprocess như `AI -> A.I.` hoặc `100 -> một trăm`.
+| Yêu cầu | Phiên bản |
+|----------|-----------|
+| Python | >= 3.11 |
+| Node.js | >= 18.0 |
+| FFmpeg | Cần thiết cho audio/video |
 
-### 2. Media Chạy Theo Hai Tầng
-
-- Tầng 1: `media_searcher` lấy kết quả candidate từ stock source.
-- Tầng 2: `media_reranker` dùng VLM để chấm top-k candidate và chọn media phù hợp nhất.
-
-Trong demo flow, VLM rerank chạy tự động trước khi job chuyển sang `review_ready`.
-
-### 3. JSON Contract Là Điểm Nối Giữa Python Và Remotion
-
-- Python side sinh `snake_case` JSON bằng Pydantic.
-- Remotion side nhận dữ liệu, camelize key và validate lại bằng Zod.
-- Điều này giúp renderer không phụ thuộc trực tiếp vào logic Python runtime.
-
-## Dữ Liệu Đầu Ra Quan Trọng
-
-- `output/<job_id>/video_props.json`: contract gốc từ pipeline Python.
-- `output/<job_id>/video_props_render.json`: contract đã đổi path asset để Remotion render.
-- `output/<job_id>/audio/full.mp3`: audio narration.
-- `output/<job_id>/media/*`: media tải về cho từng scene.
-- `output/<job_id>/final.mp4`: video kết quả.
-
-## Lưu Trạng Thái Job
-
-Demo API hỗ trợ 3 mode lưu job state qua `JOB_STORE_BACKEND`:
-
-- `auto`: ưu tiên Redis, lỗi thì fallback sang file store.
-- `redis`: bắt buộc Redis.
-- `file`: lưu trực tiếp vào `output/.demo_jobs/`.
-
-Key Redis có dạng `autoclip:demo:job:<job_id>`.
-
-## Thư Mục Chính
-
-```text
-api/        FastAPI backend (Auth, Jobs, SSE, Static serve)
-app/        Pipeline orchestration, nodes, schema
-remotion/   Video Renderer (React/TS)
-web/        Modern Studio Frontend (React/Vite/TS/Shadcn)
-output/     Artefacts sinh ra theo từng job
-tests/      Integration tests (29/29 passing)
-scripts/    Utility scripts
-```
-
-## File Quan Trọng
-
-- `app/orchestrator.py`: điều phối toàn pipeline.
-- `app/nodes/content_parser.py`: parser 3 phase và integrity checks.
-- `app/nodes/tts_preprocessor.py`: chuẩn hoá text trước TTS.
-- `app/nodes/word_aligner.py`: word-level alignment.
-- `app/nodes/media_searcher.py`: tìm media và candidate collection.
-- `app/nodes/media_reranker.py`: chấm candidate bằng VLM.
-- `app/state.py`: schema `VideoProps` và `Scene`.
-- `api/demo_router.py`: luồng job cho web demo.
-- `remotion/src/AutoClipVideo.tsx`: composition chính để render.
-
-## File Legacy
-
-Thư mục `src/` là scaffold cũ từ starter repo và không nằm trong pipeline AutoClip hiện tại.
-
-## Chạy Nhanh (Sản phẩm)
+### Bước 1: Clone repository & Cấu hình môi trường
 
 ```bash
-# 1. Cài đặt Python
-python -m venv .venv
-.venv\Scripts\activate
-pip install -r requirements.txt
+git clone https://github.com/Duy137/Auto-create-Video.git
+cd Auto-create-Video
+cp .env.example .env
+```
 
-# 2. Cài đặt & Build Frontend
+Mở file `.env` và điền các API key cần thiết:
+```env
+OPENAI_API_KEY=sk-...           # Bắt buộc: Xử lý LLM
+PEXELS_API_KEY=...              # Bắt buộc: Tìm media stock
+```
+
+### Bước 2: Cài đặt Python dependencies
+
+```bash
+python -m venv .venv
+
+# Windows
+.venv\Scripts\activate
+
+# macOS / Linux
+source .venv/bin/activate
+
+pip install -r requirements.txt
+```
+
+### Bước 3: Cài đặt Frontend & Remotion
+
+```bash
+# Frontend (React web app)
 cd web
 npm install
-npm run build
 cd ..
 
-# 3. Chạy API Server (Giao diện tại port 8000)
-uvicorn api.main:app --host 0.0.0.0 --port 8000
+# Remotion (Video renderer)
+cd remotion
+npm install
+cd ..
 ```
 
-Hoặc chạy pipeline CLI:
+---
+
+## 🚀 Hướng dẫn chạy dự án
+
+Dự án cung cấp 2 chế độ chạy: **Môi trường Phát triển (Development)** và **Môi trường Sản xuất (Production)**.
+
+### Cách 1: Chạy môi trường Phát triển (Dành cho việc chỉnh sửa code)
+Bạn mở 2 cửa sổ Terminal (đều đã kích hoạt `.venv` với Backend):
+
+**Terminal 1: Chạy Backend API (Thư mục gốc)**
+```bash
+uvicorn api.main:app --port 8000 --reload
+```
+
+**Terminal 2: Chạy Frontend Web App (Thư mục web)**
+```bash
+cd web
+npm run dev
+```
+👉 **Truy cập:** **http://localhost:5173** (Hoặc cổng mà Vite báo). Giao diện sẽ tự động cập nhật (Hot-reload) mỗi khi bạn lưu file code ở thư mục `web/src`.
+
+### Cách 2: Chạy môi trường Sản xuất (Chỉ dùng Backend)
+Nếu bạn chỉ muốn dùng cổng `8000` của FastAPI để hiển thị luôn cả Frontend (không cần chạy `npm run dev`), bạn phải **build (biên dịch)** code Frontend tĩnh trước:
 
 ```bash
-python run_pipeline.py --text "Nội dung của bạn"
+cd web
+npm run build
+```
+👉 Sau đó khởi động Backend (`uvicorn api.main:app --port 8000`) và truy cập thẳng vào **http://localhost:8000**.
+*(Lưu ý: Nếu bạn sửa code UI trong thư mục `web/src`, bạn PHẢI chạy lại `npm run build` thì `localhost:8000` mới nhận diện được thay đổi mới nhất).*
+
+*(Mẹo: Mọi API đã được mở khóa 100%, bạn là Admin cục bộ nên không cần đăng nhập hay lo lắng về giới hạn Quota).*
+
+---
+
+## 📁 Cấu trúc thư mục
+
+```text
+Auto-create-Video/
+├── api/                    # FastAPI backend (In-process Jobs, SSE)
+│   ├── main.py             # Entry point API server
+│   ├── routes.py           # REST API endpoints
+│   └── database.py         # SQLite database
+│
+├── app/                    # Core application logic
+│   ├── agents/             # Agentic AI stack
+│   ├── pipeline/           # Pipeline nodes (parser, TTS, media...)
+│   └── utils/              # Shared utilities
+│
+├── web/                    # Frontend (React + TypeScript + Vite)
+│   └── src/                # Giao diện UI (Create, Studio, Dashboard)
+│
+├── remotion/               # Video renderer (React + Remotion)
+│   └── src/                # AutoClipVideo.tsx và các scene
+│
+├── config.py               # Cấu hình biến môi trường
+└── run_pipeline.py         # CLI chạy trực tiếp qua Terminal (tuỳ chọn)
 ```

@@ -277,9 +277,13 @@ export const StockBackground: React.FC<StockBackgroundProps> = ({
       {/* Background layer — depends on layout */}
       {layout === "center_focus" ? (
         // center_focus: gradient only, no media, no Ken Burns
+        // Use a semi-transparent gradient so the global AnimatedBackground can show through
         <AbsoluteFill
           style={{
-            background: `linear-gradient(${gradientAngle}deg, ${colorPalette.background} 0%, ${colorPalette.secondary}18 ${gradientStop}%, ${colorPalette.background} 100%)`,
+            background: `
+              linear-gradient(${gradientAngle}deg, ${colorPalette.background} 0%, transparent 58%, ${colorPalette.secondary}14 100%),
+              radial-gradient(circle at 50% ${gradientStop}%, ${colorPalette.secondary}18 0%, transparent 80%)
+            `,
           }}
         />
       ) : (

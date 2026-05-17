@@ -40,8 +40,8 @@ import { EmojiGrid } from "./scenes/EmojiGrid";
 import { Comparison } from "./scenes/Comparison";
 import { MediaShowcase } from "./scenes/MediaShowcase";
 import { Timeline } from "./scenes/Timeline";
-import { NewsIntro } from "./scenes/NewsIntro";
-import { StoryBeats } from "./scenes/StoryBeats";  // [CryptoVN Custom]
+import { StoryBeats } from "./scenes/StoryBeats";
+import { CryptoVN101News } from "./scenes/CryptoVN101News"; // [CryptoVN Custom]
 
 // Shared components & utilities
 import { AnimatedCaption } from "./components/AnimatedCaption";
@@ -54,7 +54,7 @@ import { getTransition } from "./lib/transitions";
 
 type AutoClipVideoProps = VideoProps;
 
-/** Resolve asset URL: local paths use staticFile(), remote URLs pass through */
+/** Resolve asset URL: local paths are staged into remotion/public and served by Remotion. */
 function resolveAssetUrl(url: string): string {
   if (url.startsWith("http://") || url.startsWith("https://")) return url;
   return staticFile(url);
@@ -64,10 +64,12 @@ const SceneRenderer: React.FC<{
   scene: VideoProps["scenes"][0];
   colorPalette: VideoProps["colorPalette"];
   wordTimestamps: VideoProps["wordTimestamps"];
-}> = ({ scene, colorPalette, wordTimestamps }) => {
+  brandLogoUrl?: string | null;
+  brandName?: string | null;
+}> = ({ scene, colorPalette, wordTimestamps, brandLogoUrl, brandName }) => {
   switch (scene.sceneType) {
     case "title_card":
-      return <TitleCard scene={scene} colorPalette={colorPalette} />;
+      return <TitleCard scene={scene} colorPalette={colorPalette} brandLogoUrl={brandLogoUrl} brandName={brandName} />;
     case "stock_background":
       return <StockBackground scene={scene} colorPalette={colorPalette} wordTimestamps={wordTimestamps} />;
     case "info_card":
@@ -84,9 +86,8 @@ const SceneRenderer: React.FC<{
       return <MediaShowcase scene={scene} colorPalette={colorPalette} />;
     case "timeline":
       return <Timeline scene={scene} colorPalette={colorPalette} wordTimestamps={wordTimestamps} />;
-    case "news_intro":
-      return <NewsIntro scene={scene} colorPalette={colorPalette} />;
-    // [CryptoVN Custom] Story Beats fallback
+    case "cryptovn101_news": // [CryptoVN Custom]
+      return <CryptoVN101News scene={scene} colorPalette={colorPalette} />;
     case "story_beats":
       return <StoryBeats scene={scene} colorPalette={colorPalette} wordTimestamps={wordTimestamps} />;
     default:
@@ -110,7 +111,7 @@ const getTransitionDurationFrames = (
   }
 };
 
-export const getSceneDurationFrames = (
+const getSceneDurationFrames = (
   scene: Pick<VideoProps["scenes"][0], "startMs" | "endMs">,
   fps: number,
 ): number => {
@@ -166,6 +167,8 @@ const SceneWithEntryMotion: React.FC<{
   sequenceDurationFrames: number;
   outgoingTransitionName: string;
   outgoingTransitionDuration: number;
+  brandLogoUrl?: string | null;
+  brandName?: string | null;
 }> = ({
   scene,
   colorPalette,
@@ -173,6 +176,8 @@ const SceneWithEntryMotion: React.FC<{
   sequenceDurationFrames,
   outgoingTransitionName,
   outgoingTransitionDuration,
+  brandLogoUrl,
+  brandName,
 }) => {
   const frame = useCurrentFrame();
   const incomingTransitionName = scene.transition ?? "fade";
@@ -237,9 +242,9 @@ const SceneWithEntryMotion: React.FC<{
         opacity: entryOpacity * exitOpacity,
       }}
     >
-      <SceneRenderer scene={scene} colorPalette={colorPalette} wordTimestamps={wordTimestamps} />
+      <SceneRenderer scene={scene} colorPalette={colorPalette} wordTimestamps={wordTimestamps} brandLogoUrl={brandLogoUrl} brandName={brandName} />
       {/* Emoji pop-up overlay (per-scene, not on title_card) */}
-      {scene.emoji && scene.sceneType !== "title_card" && scene.sceneType !== "news_intro" && scene.sceneType !== "story_beats" && (
+      {scene.emoji && scene.sceneType !== "title_card" && (
         <EmojiPopup
           emoji={scene.emoji}
           narration={scene.narration}
@@ -264,12 +269,9 @@ export const AutoClipVideo: React.FC<AutoClipVideoProps> = (rawProps) => {
     settings,
   } = props;
 
-  // [CryptoVN Custom] When custom background is set, make scene backgrounds
-  // transparent so AnimatedBackground (Layer 0) shows through.
-  const hasCustomBg = !!settings.customBackgroundUrl;
-  const effectivePalette = hasCustomBg
-    ? { ...colorPalette, background: "transparent" }
-    : colorPalette;
+  // Since AnimatedBackground (Layer 0) renders the preset gradient,
+  // we must make the scene background transparent so it shows through.
+  const effectivePalette = { ...colorPalette, background: "transparent" };
 
   return (
     <AbsoluteFill>
@@ -280,7 +282,6 @@ export const AutoClipVideo: React.FC<AutoClipVideoProps> = (rawProps) => {
         secondaryColor={colorPalette.secondary}
         customBackgroundUrl={settings.customBackgroundUrl}
         customBackgroundType={settings.customBackgroundType}
-        customBackgroundDurationSec={settings.customBackgroundDurationSec}
       />
       {/* Layer 1: Scene sequences with transitions */}
       <TransitionSeries>
@@ -316,6 +317,8 @@ export const AutoClipVideo: React.FC<AutoClipVideoProps> = (rawProps) => {
                   sequenceDurationFrames={compensatedDuration}
                   outgoingTransitionName={hasTransition ? nextTransitionName : "none"}
                   outgoingTransitionDuration={transitionDurationFrames}
+                  brandLogoUrl={props.brandLogoUrl}
+                  brandName={props.brandName}
                 />
               </TransitionSeries.Sequence>
               {/* Add transition between scenes (not after the last one) */}
@@ -389,7 +392,7 @@ export const AutoClipVideo: React.FC<AutoClipVideoProps> = (rawProps) => {
           <Sequence key={`sfx-${i}`} from={Math.max(0, absFrame - 5)} durationInFrames={30}>
             <Audio
               src={staticFile("sfx/whoosh.mp3")}
-              volume={settings.sfx?.volume ?? 0.25}
+              volume={() => settings.sfx?.volume ?? 0.25}
             />
           </Sequence>
         );

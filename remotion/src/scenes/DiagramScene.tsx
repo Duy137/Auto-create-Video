@@ -25,6 +25,7 @@ import { BlockMath } from "react-katex";
 import type { SceneData, VideoProps } from "../schemas/videoProps";
 import { fontFamily } from "../lib/fonts";
 import { useExitAnimation } from "../lib/useExitAnimation";
+import { AnimatedGradientBg } from "../components/AnimatedGradientBg";
 
 interface DiagramSceneProps {
   scene: SceneData;
@@ -49,6 +50,19 @@ const PLOT = {
   width: CHART.WIDTH - CHART.MARGIN.left - CHART.MARGIN.right,
   height: CHART.HEIGHT - CHART.MARGIN.top - CHART.MARGIN.bottom,
 } as const;
+
+/**
+ * Compute the maximum pixel width for an SVG chart so it never overflows
+ * the video frame vertically when the chart starts at topOffset px from top.
+ * Maintains the SVG's 800×500 aspect ratio.
+ */
+function _chartMaxWidth(vw: number, vh: number, topOffset: number): number {
+  const bottomMargin = 80;
+  const maxH = vh - topOffset - bottomMargin;
+  const maxWByHeight = maxH * (CHART.WIDTH / CHART.HEIGHT);
+  const containerW = (vw - 120) * 0.97;  // left:60 + right:60 + small safety margin
+  return Math.round(Math.min(containerW, maxWByHeight));
+}
 
 // ═════════════════════════════════════
 // Sub-view: Math Formula (KaTeX)
@@ -191,6 +205,8 @@ const LineChartView: React.FC<{
   frame: number;
   fps: number;
 }> = ({ spec, colorPalette, frame }) => {
+  const { width: vw, height: vh } = useVideoConfig();
+  const chartMaxWidth = _chartMaxWidth(vw, vh, 280);
   const data = (spec.data ?? []) as DataPoint[];
   if (data.length === 0) return null;
 
@@ -243,7 +259,7 @@ const LineChartView: React.FC<{
     >
       <svg
         viewBox={`0 0 ${CHART.WIDTH} ${CHART.HEIGHT}`}
-        style={{ width: "100%", maxWidth: 800 }}
+        style={{ width: "100%", maxWidth: chartMaxWidth }}
       >
         {/* Grid lines */}
         {yTicks.map((tick, i) => {
@@ -381,6 +397,8 @@ const BarChartView: React.FC<{
   frame: number;
   fps: number;
 }> = ({ spec, colorPalette, frame, fps }) => {
+  const { width: vw, height: vh } = useVideoConfig();
+  const chartMaxWidth = _chartMaxWidth(vw, vh, 300);
   const data = (spec.data ?? []) as DataPoint[];
   if (data.length === 0) return null;
 
@@ -407,7 +425,7 @@ const BarChartView: React.FC<{
     >
       <svg
         viewBox={`0 0 ${CHART.WIDTH} ${CHART.HEIGHT}`}
-        style={{ width: "100%", maxWidth: 800 }}
+        style={{ width: "100%", maxWidth: chartMaxWidth }}
       >
         {/* X axis */}
         <line
@@ -497,6 +515,8 @@ const ScatterView: React.FC<{
   frame: number;
   fps: number;
 }> = ({ spec, colorPalette, frame, fps }) => {
+  const { width: vw, height: vh } = useVideoConfig();
+  const chartMaxWidth = _chartMaxWidth(vw, vh, 300);
   const data = (spec.data ?? []) as DataPoint[];
   if (data.length === 0) return null;
 
@@ -529,7 +549,7 @@ const ScatterView: React.FC<{
     >
       <svg
         viewBox={`0 0 ${CHART.WIDTH} ${CHART.HEIGHT}`}
-        style={{ width: "100%", maxWidth: 800 }}
+        style={{ width: "100%", maxWidth: chartMaxWidth }}
       >
         {/* Axes */}
         <line
@@ -637,10 +657,9 @@ const FallbackView: React.FC<{
 export const DiagramScene: React.FC<DiagramSceneProps> = ({
   scene,
   colorPalette,
-  wordTimestamps: _wordTimestamps = [],
 }) => {
   const frame = useCurrentFrame();
-  const { fps } = useVideoConfig();
+  const { fps, width, height } = useVideoConfig();
   const exitOpacity = useExitAnimation();
 
   const spec = scene.diagramSpec;
@@ -653,35 +672,44 @@ export const DiagramScene: React.FC<DiagramSceneProps> = ({
   return (
     <AbsoluteFill
       style={{
-        background: `linear-gradient(160deg, ${colorPalette.background} 0%, ${colorPalette.secondary}12 50%, ${colorPalette.background} 100%)`,
         opacity: exitOpacity,
       }}
     >
-      {/* Header: narration excerpt */}
+      {/* Animated background */}
+      <AnimatedGradientBg
+        colorPalette={colorPalette}
+        intensity="subtle"
+        withParticles={true}
+        particleDensity={8}
+      />
+
+      {/* Header */}
       <div
         style={{
           position: "absolute",
-          top: 160,
+          top: Math.round(height * 0.06),
           left: 0,
           right: 0,
           textAlign: "center",
           opacity: headerOpacity,
           padding: "0 60px",
+          zIndex: 10,
         }}
       >
         <h2
           style={{
             fontFamily,
-            fontSize: 42,
+            fontSize: Math.max(30, Math.round(width * 0.038)),
             fontWeight: 800,
             color: colorPalette.text,
             margin: 0,
             lineHeight: 1.3,
-            maxHeight: 120,
+            maxHeight: 100,
             overflow: "hidden",
             display: "-webkit-box",
             WebkitLineClamp: 2,
             WebkitBoxOrient: "vertical",
+            textShadow: "0 2px 12px rgba(0,0,0,0.4)",
           }}
         >
           {scene.visualDescription}

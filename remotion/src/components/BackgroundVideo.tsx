@@ -9,7 +9,7 @@ import { AbsoluteFill, Img, OffthreadVideo, useCurrentFrame, interpolate, static
 
 /** Resolve asset URL: local paths use staticFile(), remote URLs pass through */
 function resolveAssetUrl(url: string): string {
-  if (url.startsWith("http://") || url.startsWith("https://")) return url;
+  if (url.startsWith("http://") || url.startsWith("https://") || url.startsWith("/api/")) return url;
   return staticFile(url);
 }
 
@@ -61,8 +61,9 @@ export const BackgroundVideo: React.FC<BackgroundVideoProps> = ({
   };
 
   const gradientStyle: React.CSSProperties = {
-    background: `linear-gradient(135deg, ${fallbackGradient[0]} 0%, ${fallbackGradient[1]} 100%)`,
-    opacity: fadeIn,
+    // Keep the fallback gentle so the global AnimatedBackground still shows through.
+    background: `linear-gradient(135deg, ${fallbackGradient[0]}, ${fallbackGradient[1]})`,
+    opacity: fadeIn * 0.35,
   };
 
   return (

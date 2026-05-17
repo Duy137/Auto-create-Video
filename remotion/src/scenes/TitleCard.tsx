@@ -24,6 +24,8 @@ import { FloatingParticles } from "../components/FloatingParticles";
 interface TitleCardProps {
   scene: SceneData;
   colorPalette: VideoProps["colorPalette"];
+  brandLogoUrl?: string | null;
+  brandName?: string | null;
 }
 
 type TitleLine = { text: string; style: "normal" | "highlight" | "accent" };
@@ -50,12 +52,17 @@ const BADGE_WHITELIST = new Set(["BREAKING", "NEW", "TIP", "WARNING", "UPDATE"])
 
 const STAGGER_DELAY = 10; // frames between lines (~0.33s at 30fps)
 
-export const TitleCard: React.FC<TitleCardProps> = ({
+import { NewsIntroLayout } from "./title_card/NewsIntroLayout";
+import { EducationalLayout } from "./title_card/EducationalLayout";
+import { TutorialLayout } from "./title_card/TutorialLayout";
+import { CommercialLayout } from "./title_card/CommercialLayout";
+
+const DefaultTitleCard: React.FC<TitleCardProps> = ({
   scene,
   colorPalette,
 }) => {
   const frame = useCurrentFrame();
-  const { fps } = useVideoConfig();
+  const { fps, width, height } = useVideoConfig();
   const exitOpacity = useExitAnimation();
   const sceneDurationFrames = Math.max(
     1,
@@ -82,6 +89,15 @@ export const TitleCard: React.FC<TitleCardProps> = ({
     [-1, 1],
     [0.3, 0.6]
   );
+  const horizontalPadding = Math.round(width * 0.07);
+  const topCircleSize = Math.max(Math.round(width * 0.36), 220);
+  const bottomCircleSize = Math.max(Math.round(width * 0.44), 260);
+  const iconSize = Math.max(44, Math.round(width * 0.06));
+  const badgeFontSize = Math.max(16, Math.round(width * 0.02));
+  const normalMax = Math.max(44, Math.round(width * 0.06));
+  const highlightMax = Math.max(58, Math.round(width * 0.09));
+  const accentMax = Math.max(48, Math.round(width * 0.07));
+  const accentLineMaxWidth = Math.max(180, Math.round(width * 0.22));
 
   // ── Resolve title lines (LLM → fallback) ──
   const lines: TitleLine[] =
@@ -125,8 +141,8 @@ export const TitleCard: React.FC<TitleCardProps> = ({
           position: "absolute",
           top: "15%",
           right: "-5%",
-          width: 400,
-          height: 400,
+          width: topCircleSize,
+          height: topCircleSize,
           borderRadius: "50%",
           background: `radial-gradient(circle, ${colorPalette.primary}20, transparent 70%)`,
           filter: "blur(40px)",
@@ -138,8 +154,8 @@ export const TitleCard: React.FC<TitleCardProps> = ({
           position: "absolute",
           bottom: "20%",
           left: "-10%",
-          width: 500,
-          height: 500,
+          width: bottomCircleSize,
+          height: bottomCircleSize,
           borderRadius: "50%",
           background: `radial-gradient(circle, ${colorPalette.secondary}18, transparent 70%)`,
           filter: "blur(50px)",
@@ -154,14 +170,14 @@ export const TitleCard: React.FC<TitleCardProps> = ({
           flexDirection: "column",
           justifyContent: "center",
           alignItems: "center",
-          padding: "0 80px",
+          padding: `0 ${horizontalPadding}px`,
         }}
       >
         {/* Optional top icon */}
         {topIcon && (
           <div
             style={{
-              fontSize: 64,
+              fontSize: iconSize,
               marginBottom: 16,
               opacity: badgeOpacity,
               transform: `scale(${badgeProgress})`,
@@ -187,7 +203,7 @@ export const TitleCard: React.FC<TitleCardProps> = ({
             <span
               style={{
                 fontFamily,
-                fontSize: 22,
+                fontSize: badgeFontSize,
                 fontWeight: 800,
                 color: colorPalette.primary,
                 letterSpacing: 3,
@@ -236,29 +252,37 @@ export const TitleCard: React.FC<TitleCardProps> = ({
             // Font size based on style + autoFontSize
             const fontSize =
               line.style === "highlight"
-                ? autoFontSize(line.text, 96, 80, 12)
+                ? autoFontSize(line.text, highlightMax, Math.max(40, Math.round(width * 0.055)), 12)
                 : line.style === "accent"
-                  ? autoFontSize(line.text, 72, 52, 15)
-                  : autoFontSize(line.text, 64, 48, 15);
+                  ? autoFontSize(line.text, accentMax, Math.max(32, Math.round(width * 0.045)), 15)
+                  : autoFontSize(line.text, normalMax, Math.max(30, Math.round(width * 0.04)), 15);
 
             // Color — colorPalette is now contrast-validated by pipeline
-            const color =
+            const lineColor =
               line.style === "highlight"
                 ? colorPalette.primary
                 : line.style === "accent"
                   ? colorPalette.secondary
                   : colorPalette.text;
 
-            // Highlight gradient style
+            // Determine tint color for normal text based on the NEXT line's color
+            const nextStyle = lines[i + 1]?.style;
+            const tintColor = nextStyle === "highlight" ? colorPalette.primary : nextStyle === "accent" ? colorPalette.secondary : null;
+            const normalColor = tintColor ? `color-mix(in srgb, #ffffff 85%, ${tintColor})` : "#ffffff";
+
+            // Highlight solid color style
             const highlightStyle: React.CSSProperties =
               line.style === "highlight"
                 ? {
-                    background: `linear-gradient(135deg, ${colorPalette.primary}, ${colorPalette.secondary})`,
-                    WebkitBackgroundClip: "text",
-                    WebkitTextFillColor: "transparent",
-                    filter: `drop-shadow(0 0 ${20 + glowPulse * 20}px ${colorPalette.primary}80)`,
+                    color: lineColor,
+                    filter: `drop-shadow(0 0 ${20 + glowPulse * 20}px ${colorPalette.primary}90)`,
                   }
-                : {};
+                : line.style === "accent"
+                  ? {
+                      color: lineColor,
+                      filter: `drop-shadow(0 0 15px ${colorPalette.secondary}70)`,
+                    }
+                  : { color: normalColor, filter: `drop-shadow(0 4px 20px rgba(0,0,0,0.8))` };
 
             return (
               <div
@@ -266,17 +290,12 @@ export const TitleCard: React.FC<TitleCardProps> = ({
                 style={{
                   fontFamily,
                   fontSize,
-                  fontWeight: line.style === "highlight" ? 900 : line.style === "accent" ? 700 : 800,
-                  color,
+                  fontWeight: 900,
                   opacity: lineOpacity,
                   transform: `translateY(${lineY}px) scale(${lineScale})`,
-                  lineHeight: 1.2,
-                  letterSpacing: line.style === "highlight" ? 2 : 0,
-                  textTransform: line.style === "highlight" ? "uppercase" : "none",
-                  textShadow:
-                    line.style === "highlight"
-                      ? undefined
-                      : `0 4px 20px rgba(0,0,0,0.7), 0 0 40px rgba(0,0,0,0.3)`,
+                  lineHeight: 1.35,
+                  letterSpacing: -1,
+                  textTransform: "uppercase",
                   ...highlightStyle,
                 }}
               >
@@ -289,19 +308,36 @@ export const TitleCard: React.FC<TitleCardProps> = ({
         {/* Accent line */}
         <div
           style={{
-            marginTop: 40,
+            marginTop: Math.round(height * 0.02),
             width: interpolate(
               frame,
               [lines.length * STAGGER_DELAY + 10, lines.length * STAGGER_DELAY + 30],
-              [0, 240],
+              [0, accentLineMaxWidth],
               { extrapolateLeft: "clamp", extrapolateRight: "clamp" }
             ),
             height: 6,
             borderRadius: 3,
-            background: `linear-gradient(90deg, ${colorPalette.primary}, ${colorPalette.secondary})`,
+            background: `linear-gradient(90deg, transparent, ${colorPalette.primary}, ${colorPalette.secondary}, transparent)`,
           }}
         />
       </AbsoluteFill>
     </AbsoluteFill>
   );
+};
+
+export const TitleCard: React.FC<TitleCardProps> = (props) => {
+  const layout = props.scene.layout;
+  
+  switch (layout) {
+    case "news_intro":
+      return <NewsIntroLayout {...props} />;
+    case "educational":
+      return <EducationalLayout {...props} />;
+    case "tutorial":
+      return <TutorialLayout {...props} />;
+    case "commercial":
+      return <CommercialLayout {...props} />;
+    default:
+      return <DefaultTitleCard {...props} />;
+  }
 };

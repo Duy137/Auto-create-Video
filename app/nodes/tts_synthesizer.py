@@ -777,11 +777,35 @@ class VbeeTTSEngine(TTSEngine):
                     f"(request_id={request_id})"
                 )
 
-            # ── Step 3: Download audio ──
-            async with httpx.AsyncClient(timeout=30, follow_redirects=True) as client:
-                audio_resp = await client.get(audio_link)
-                audio_resp.raise_for_status()
-                audio_bytes = audio_resp.content
+            # ── Step 3: Download audio (with retry for transient network errors) ── [CryptoVN Custom]
+            audio_bytes = None
+            _download_errors = (httpx.ConnectTimeout, httpx.ReadTimeout, httpx.ConnectError, httpx.RemoteProtocolError)
+            for dl_attempt in range(3):
+                try:
+                    transport = httpx.AsyncHTTPTransport(retries=3)
+                    headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"}
+                    async with httpx.AsyncClient(
+                        transport=transport,
+                        timeout=60,
+                        follow_redirects=True,
+                        headers=headers
+                    ) as client:
+                        audio_resp = await client.get(audio_link)
+                        audio_resp.raise_for_status()
+                        audio_bytes = audio_resp.content
+                    break  # success
+                except _download_errors as dl_err:
+                    logger.warning(
+                        "Vbee TTS: download attempt {}/3 failed: {} — {}",
+                        dl_attempt + 1, type(dl_err).__name__, str(dl_err)[:200],
+                    )
+                    if dl_attempt < 2:
+                        await asyncio.sleep(2 * (dl_attempt + 1))  # 2s, 4s
+                    else:
+                        raise TTSError(
+                            f"Vbee TTS: failed to download audio after 3 attempts "
+                            f"(audio_link={audio_link}): {dl_err}"
+                        ) from dl_err
 
             if not audio_bytes or len(audio_bytes) < 100:
                 raise TTSError("Vbee TTS returned empty or too-small audio")

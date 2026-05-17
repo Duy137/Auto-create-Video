@@ -1,15 +1,17 @@
 // remotion/src/scenes/EmojiGrid.tsx
 /**
- * EmojiGrid scene — playful 2×2 grid of emoji-centric cards.
+ * EmojiGrid scene — icon_showcase layout (large icons, minimal text).
  *
- * Distinct from InfoCard:
- *   - Background: subtle gradient with primary/secondary tints (not pure dark)
- *   - Emoji: large and centered (48-56px)
- *   - Style: playful, spacious, colorful
- *   - Best for: feature lists, tool lists, category overviews
+ * Features:
+ *   - Large emoji/icons (80px) as focal point
+ *   - Circular gradient glow behind each icon
+ *   - Minimal text (small title + subtitle)
+ *   - AnimatedGradientBg for depth
+ *   - Subtle continuous icon wiggle animation
+ *   - Voice-synced stagger reveal
  *
  * Uses same cardItems data as InfoCard (icon, title, subtitle).
- * Always renders grid_2x2 layout. Max 4 items.
+ * Max 4 items. Renders as a 2×2 or vertical layout based on count.
  */
 
 import React from "react";
@@ -25,6 +27,7 @@ import { fontFamily } from "../lib/fonts";
 import { autoFontSize } from "../lib/textUtils";
 import { getItemRevealFrames } from "../lib/voiceSync";
 import { useExitAnimation } from "../lib/useExitAnimation";
+import { AnimatedGradientBg } from "../components/AnimatedGradientBg";
 
 interface EmojiGridProps {
   scene: SceneData;
@@ -34,46 +37,54 @@ interface EmojiGridProps {
 
 type CardItem = { icon: string; title: string; subtitle: string };
 
-// ── Single Grid Card ──
+// ── Single Icon Card ──
 
-const EmojiGridCard: React.FC<{
+const IconCard: React.FC<{
   card: CardItem;
   colorPalette: VideoProps["colorPalette"];
   frame: number;
   fps: number;
   delay: number;
   cardIndex: number;
-}> = ({ card, colorPalette, frame, fps, delay, cardIndex }) => {
-  const isEvenCard = cardIndex % 2 === 0;
-
+  isActive: boolean;
+}> = ({ card, colorPalette, frame, fps, delay, cardIndex, isActive }) => {
+  // Entry animation
   const cardProgress = spring({
     frame: Math.max(0, frame - delay),
     fps,
-    config: { damping: 18, stiffness: 120, mass: 0.4 },
+    config: { damping: 14, stiffness: 140, mass: 0.5 },
   });
 
   const iconProgress = spring({
-    frame: Math.max(0, frame - delay - 5),
+    frame: Math.max(0, frame - delay - 4),
     fps,
-    config: { damping: 10, stiffness: 180, mass: 0.5 },
+    config: { damping: 8, stiffness: 200, mass: 0.4 },
   });
 
-  const cardOpacity = interpolate(frame, [delay, delay + 8], [0, 1], {
+  const cardOpacity = interpolate(frame, [delay, delay + 10], [0, 1], {
     extrapolateLeft: "clamp",
     extrapolateRight: "clamp",
   });
 
-  const translateX = interpolate(cardProgress, [0, 1], [isEvenCard ? -50 : 50, 0]);
-  const rotation = interpolate(cardProgress, [0, 1], [isEvenCard ? -2 : 2, 0]);
-  const cardScale = interpolate(cardProgress, [0, 1], [0.9, 1], {
-    extrapolateLeft: "clamp",
-    extrapolateRight: "clamp",
-  });
-  const iconScale = interpolate(iconProgress, [0, 1], [0.8, 1]);
-  const shadowOpacity = interpolate(cardProgress, [0, 0.5, 1], [0, 0.12, 0.28], {
-    extrapolateLeft: "clamp",
-    extrapolateRight: "clamp",
-  });
+  const cardScale = interpolate(cardProgress, [0, 1], [0.85, 1]);
+  const iconScale = interpolate(iconProgress, [0, 1], [0.5, 1]);
+
+  // Continuous subtle wiggle for revealed icons
+  const isRevealed = frame >= delay + 10;
+  const wiggle = isRevealed
+    ? Math.sin((frame - delay) * 0.06 + cardIndex * 1.5) * 3
+    : 0;
+  const wiggleRotate = isRevealed
+    ? Math.sin((frame - delay) * 0.04 + cardIndex * 2.0) * 2
+    : 0;
+
+  // Active glow intensity
+  const glowIntensity = isActive
+    ? interpolate(Math.sin(frame * 0.07), [-1, 1], [0.3, 0.7])
+    : 0.1;
+
+  // Pick accent color alternating
+  const accentColor = cardIndex % 2 === 0 ? colorPalette.primary : colorPalette.secondary;
 
   return (
     <div
@@ -82,33 +93,55 @@ const EmojiGridCard: React.FC<{
         flexDirection: "column",
         alignItems: "center",
         justifyContent: "center",
-        padding: "32px 20px",
+        padding: "36px 20px 28px",
         borderRadius: 24,
-        backgroundColor: "rgba(255, 255, 255, 0.05)",
-        border: "1px solid rgba(255, 255, 255, 0.1)",
-        backdropFilter: "blur(8px)",
+        backgroundColor: "rgba(255, 255, 255, 0.03)",
+        border: `1px solid rgba(255, 255, 255, ${isActive ? 0.12 : 0.06})`,
         opacity: cardOpacity,
-        transform: `translateX(${translateX}px) rotate(${rotation}deg) scale(${cardScale})`,
-        boxShadow: `0 8px 32px rgba(0, 0, 0, ${shadowOpacity})`,
-        gap: 12,
+        transform: `scale(${cardScale})`,
+        gap: 16,
       }}
     >
-      {/* Large Emoji */}
+      {/* Icon with circular gradient glow */}
       <div
         style={{
-          fontSize: 52,
-          lineHeight: 1,
-          transform: `scale(${iconScale})`,
+          position: "relative",
+          width: 180,
+          height: 180,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
         }}
       >
-        {card.icon}
+        {/* Glow circle behind icon */}
+        <div
+          style={{
+            position: "absolute",
+            width: 160,
+            height: 160,
+            borderRadius: "50%",
+            background: `radial-gradient(circle, ${accentColor}${Math.round(glowIntensity * 255).toString(16).padStart(2, "0")} 0%, transparent 70%)`,
+          }}
+        />
+        {/* Large emoji */}
+        <div
+          style={{
+            fontSize: 120,
+            lineHeight: 1,
+            transform: `scale(${iconScale}) translateY(${wiggle}px) rotate(${wiggleRotate}deg)`,
+            zIndex: 2,
+            filter: isActive ? `drop-shadow(0 0 14px ${accentColor}40)` : "none",
+          }}
+        >
+          {card.icon}
+        </div>
       </div>
 
-      {/* Title */}
+      {/* Title — compact */}
       <div
         style={{
           fontFamily,
-          fontSize: 28,
+          fontSize: autoFontSize(card.title, 38, 28),
           fontWeight: 700,
           color: colorPalette.text,
           textAlign: "center",
@@ -118,13 +151,13 @@ const EmojiGridCard: React.FC<{
         {card.title}
       </div>
 
-      {/* Subtitle */}
+      {/* Subtitle — minimal */}
       <div
         style={{
           fontFamily,
-          fontSize: autoFontSize(card.subtitle, 22, 18),
+          fontSize: autoFontSize(card.subtitle, 28, 20),
           fontWeight: 400,
-          color: `${colorPalette.text}B3`,
+          color: `${colorPalette.text}90`,
           textAlign: "center",
           lineHeight: 1.3,
           maxWidth: "100%",
@@ -148,11 +181,10 @@ export const EmojiGrid: React.FC<EmojiGridProps> = ({
   wordTimestamps = [],
 }) => {
   const frame = useCurrentFrame();
-  const { fps } = useVideoConfig();
+  const { fps, width, height } = useVideoConfig();
   const exitOpacity = useExitAnimation();
 
   const allCards = scene.cardItems ?? [];
-  // Max 4 items for 2×2 grid
   const cards = allCards.slice(0, 4);
 
   // Voice-sync reveal frames
@@ -164,56 +196,75 @@ export const EmojiGrid: React.FC<EmojiGridProps> = ({
     fps,
   );
 
+  // Find active card index
+  const activeIndex = cards.reduce(
+    (active, _, i) => {
+      if (frame >= revealFrames[i]) return i;
+      return active;
+    },
+    -1,
+  );
+
   // Header animation
   const headerOpacity = interpolate(frame, [0, 15], [0, 1], {
     extrapolateRight: "clamp",
   });
 
-  // Determine grid columns based on item count
+  // Grid layout: 2 columns for 3-4 items, 1 column for 1-2 items
   const gridColumns = cards.length <= 2 ? "1fr" : "1fr 1fr";
 
+  // Dynamic top positioning based on content
+  const headerTop = Math.round(height * 0.12);
+  const gridTop = Math.round(height * 0.23);
+
   return (
-    <AbsoluteFill
-      style={{
-        background: `linear-gradient(135deg, ${colorPalette.primary}20 0%, ${colorPalette.background} 40%, ${colorPalette.secondary}20 100%)`,
-        opacity: exitOpacity,
-      }}
-    >
+    <AbsoluteFill style={{ opacity: exitOpacity }}>
+      {/* Animated background — dark minimal */}
+      <AnimatedGradientBg
+        colorPalette={colorPalette}
+        intensity="subtle"
+        withParticles={true}
+        particleDensity={10}
+      />
+
       {/* Header */}
       <div
         style={{
           position: "absolute",
-          top: 160,
+          top: headerTop,
           left: 0,
           right: 0,
           textAlign: "center",
           opacity: headerOpacity,
           padding: "0 60px",
+          zIndex: 10,
         }}
       >
         <h2
           style={{
             fontFamily,
-            fontSize: 44,
+            fontSize: Math.max(48, Math.round(width * 0.055)),
             fontWeight: 800,
             color: colorPalette.text,
             margin: 0,
             lineHeight: 1.3,
-            maxHeight: 120,
+            maxHeight: 100,
             overflow: "hidden",
             display: "-webkit-box",
             WebkitLineClamp: 2,
             WebkitBoxOrient: "vertical",
+            textShadow: "0 4px 20px rgba(0,0,0,0.5)",
           }}
         >
           {scene.visualDescription}
         </h2>
+        {/* Accent line */}
         <div
           style={{
             marginTop: 16,
-            width: 60,
-            height: 4,
-            borderRadius: 2,
+            width: 80,
+            height: 5,
+            borderRadius: 3,
             background: `linear-gradient(90deg, ${colorPalette.primary}, ${colorPalette.secondary})`,
             marginLeft: "auto",
             marginRight: "auto",
@@ -221,20 +272,20 @@ export const EmojiGrid: React.FC<EmojiGridProps> = ({
         />
       </div>
 
-      {/* 2×2 Grid */}
+      {/* Icon Grid */}
       <div
         style={{
           position: "absolute",
-          top: 360,
+          top: gridTop,
           left: 50,
           right: 50,
           display: "grid",
           gridTemplateColumns: gridColumns,
-          gap: 20,
+          gap: 24,
         }}
       >
         {cards.map((card, i) => (
-          <EmojiGridCard
+          <IconCard
             key={i}
             card={card}
             colorPalette={colorPalette}
@@ -242,6 +293,7 @@ export const EmojiGrid: React.FC<EmojiGridProps> = ({
             fps={fps}
             delay={revealFrames[i]}
             cardIndex={i}
+            isActive={i === activeIndex}
           />
         ))}
       </div>

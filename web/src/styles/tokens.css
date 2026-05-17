@@ -1,0 +1,257 @@
+/* ============================================================
+   AutoClip Redesign — Design Tokens
+   Phong cách: Hiện đại / vibrant (CapCut / Canva / Visla)
+   Brand: Electric violet → fuchsia gradient + accent cyan
+   ============================================================
+   Cách dùng:
+   1. import file này vào index.css ngay sau Tailwind:
+        @import "./styles/tokens.css";
+   2. Dùng classes Tailwind như: bg-brand text-brand bg-surface
+      hoặc className="bg-[var(--brand-500)]"
+   ============================================================ */
+
+:root {
+  /* ---------- Brand ramp (violet → fuchsia) ---------- */
+  --brand-50:  #f5f0ff;
+  --brand-100: #ebe1ff;
+  --brand-200: #d6c2ff;
+  --brand-300: #b794ff;
+  --brand-400: #9166ff;
+  --brand-500: #7a3dff;   /* primary */
+  --brand-600: #6326e8;
+  --brand-700: #4f1bc4;
+  --brand-800: #3f1798;
+  --brand-900: #2c1170;
+
+  /* ---------- Accent (cyan/teal — for "AI is working") ---------- */
+  --accent-300: #5ee9ff;
+  --accent-400: #22d3ee;
+  --accent-500: #06b6d4;
+  --accent-600: #0891b2;
+
+  /* ---------- Vibrant gradients ---------- */
+  --gradient-brand:  linear-gradient(135deg, #7a3dff 0%, #ff3da9 100%);
+  --gradient-aurora: linear-gradient(135deg, #7a3dff 0%, #06b6d4 50%, #ff3da9 100%);
+  --gradient-glow:   radial-gradient(60% 60% at 50% 0%, rgba(122,61,255,0.35) 0%, transparent 70%);
+
+  /* ---------- Neutral surface (light mode) ---------- */
+  --surface-0:  #ffffff;          /* card, modal */
+  --surface-1:  #fafafb;          /* page bg */
+  --surface-2:  #f3f3f6;          /* subtle bg */
+  --surface-3:  #e7e7ec;          /* hover */
+
+  --text-primary:   #0b0b14;
+  --text-secondary: #4b4b5c;
+  --text-tertiary:  #8a8a9b;
+  --text-on-brand:  #ffffff;
+
+  --border-subtle:  rgba(11, 11, 20, 0.08);
+  --border-default: rgba(11, 11, 20, 0.14);
+  --border-strong:  rgba(11, 11, 20, 0.24);
+
+  --notification-bg: var(--surface-0);
+  --notification-hover-bg: var(--surface-2);
+  --notification-unread-bg: color-mix(in srgb, var(--brand-50) 62%, transparent);
+
+  /* ---------- Status ---------- */
+  --status-success: #10b981;
+  --status-warning: #f59e0b;
+  --status-danger:  #ef4444;
+  --status-info:    #3b82f6;
+
+  /* ---------- Typography ---------- */
+  --font-display: 'Montserrat', system-ui, sans-serif;
+  --font-body:    'Be Vietnam Pro', system-ui, sans-serif;
+  --font-mono:    ui-monospace, 'Geist Mono', Menlo, monospace;
+
+  /* ---------- Radius ---------- */
+  --radius-xs: 6px;
+  --radius-sm: 10px;
+  --radius-md: 14px;
+  --radius-lg: 20px;
+  --radius-xl: 28px;
+  --radius-pill: 9999px;
+
+  /* ---------- Shadow ---------- */
+  --shadow-sm:    0 1px 2px rgba(11,11,20,0.06);
+  --shadow-md:    0 4px 16px rgba(11,11,20,0.08);
+  --shadow-lg:    0 12px 40px rgba(11,11,20,0.12);
+  --shadow-glow:  0 0 0 4px rgba(122,61,255,0.18);
+
+  /* ---------- Motion ---------- */
+  --ease-out:    cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --dur-fast:    140ms;
+  --dur-base:    220ms;
+  --dur-slow:    420ms;
+}
+
+/* ---------- Dark mode ---------- */
+.dark {
+  --surface-0:  #131320;
+  --surface-1:  #0b0b14;
+  --surface-2:  #1c1c2e;
+  --surface-3:  #2a2a40;
+
+  --text-primary:   #f5f5fa;
+  --text-secondary: #a8a8bf;
+  --text-tertiary:  #6e6e85;
+
+  --border-subtle:  rgba(255, 255, 255, 0.08);
+  --border-default: rgba(255, 255, 255, 0.14);
+  --border-strong:  rgba(255, 255, 255, 0.24);
+
+  --notification-bg: #000000;
+  --notification-hover-bg: #000000;
+  --notification-unread-bg: #000000;
+
+  --shadow-sm:    0 1px 2px rgba(0,0,0,0.4);
+  --shadow-md:    0 4px 16px rgba(0,0,0,0.4);
+  --shadow-lg:    0 12px 40px rgba(0,0,0,0.6);
+  --shadow-glow:  0 0 0 4px rgba(122,61,255,0.32);
+}
+
+/* ---------- Reusable utility-like component classes ---------- */
+
+/* Vibrant button */
+.btn-brand {
+  background: var(--gradient-brand);
+  color: var(--text-on-brand);
+  border-radius: var(--radius-md);
+  padding: 0.625rem 1.125rem;
+  font-weight: 600;
+  font-family: var(--font-body);
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  box-shadow: var(--shadow-md);
+  transition: transform var(--dur-fast) var(--ease-out), box-shadow var(--dur-fast) var(--ease-out);
+}
+.btn-brand:hover { transform: translateY(-1px); box-shadow: var(--shadow-lg); }
+.btn-brand:active { transform: translateY(0); }
+
+/* Gradient text (headlines) */
+.text-aurora {
+  background: var(--gradient-aurora);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+/* Glow halo for hero sections */
+.glow-halo {
+  position: relative;
+  isolation: isolate;
+}
+.glow-halo::before {
+  content: '';
+  position: absolute;
+  inset: -20% -10% auto -10%;
+  height: 60%;
+  background: var(--gradient-glow);
+  z-index: -1;
+  pointer-events: none;
+}
+
+/* Shimmer loading */
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+.shimmer {
+  background: linear-gradient(90deg,
+    var(--surface-2) 0%,
+    var(--surface-3) 50%,
+    var(--surface-2) 100%);
+  background-size: 200% 100%;
+  animation: shimmer 1.6s linear infinite;
+}
+
+/* Pulse dot for "live / processing" */
+@keyframes pulse-dot {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(122, 61, 255, 0.55); }
+  50%      { box-shadow: 0 0 0 8px rgba(122, 61, 255, 0); }
+}
+.pulse-dot {
+  display: inline-block;
+  width: 8px; height: 8px;
+  background: var(--brand-500);
+  border-radius: 50%;
+  animation: pulse-dot 1.6s var(--ease-out) infinite;
+}
+
+/* Card */
+.surface-card {
+  background: var(--surface-0);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+}
+
+/* Input */
+.field {
+  background: var(--surface-0);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  padding: 0.625rem 0.875rem;
+  font-family: var(--font-body);
+  color: var(--text-primary);
+  width: 100%;
+  transition: border-color var(--dur-fast), box-shadow var(--dur-fast);
+}
+.field:focus {
+  outline: none;
+  border-color: var(--brand-400);
+  box-shadow: var(--shadow-glow);
+}
+
+/* Tag/Pill */
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.25rem 0.625rem;
+  border-radius: var(--radius-pill);
+  font-size: 0.75rem;
+  font-weight: 500;
+  background: var(--surface-2);
+  color: var(--text-secondary);
+}
+.pill-brand { background: var(--brand-50); color: var(--brand-700); }
+.dark .pill-brand { background: rgba(122,61,255,0.18); color: var(--brand-300); }
+.pill-idea { background: rgba(20, 184, 166, 0.14); color: #0f766e; }
+.dark .pill-idea { background: rgba(45, 212, 191, 0.22); color: #5eead4; }
+.pill-success { background: rgba(16, 185, 129, 0.12); color: var(--status-success); }
+.pill-processing { background: rgba(14, 165, 233, 0.16); color: #0369a1; }
+.dark .pill-processing { background: rgba(14, 165, 233, 0.22); color: #7dd3fc; }
+.pill-warning { background: rgba(245, 158, 11, 0.12); color: var(--status-warning); }
+.pill-danger  { background: rgba(239, 68, 68, 0.12); color: var(--status-danger); }
+
+/* Visible, token-aligned scrollbars for compact popovers. */
+.notification-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: var(--brand-300) var(--surface-2);
+}
+.notification-scroll::-webkit-scrollbar {
+  width: 10px;
+}
+.notification-scroll::-webkit-scrollbar-track {
+  background: var(--surface-2);
+}
+.notification-scroll::-webkit-scrollbar-thumb {
+  background: var(--brand-300);
+  border: 2px solid var(--surface-2);
+  border-radius: var(--radius-pill);
+}
+.notification-scroll::-webkit-scrollbar-thumb:hover {
+  background: var(--brand-400);
+}
+.dark .notification-scroll {
+  scrollbar-color: var(--brand-400) #000000;
+}
+.dark .notification-scroll::-webkit-scrollbar-track {
+  background: #000000;
+}
+.dark .notification-scroll::-webkit-scrollbar-thumb {
+  border-color: #000000;
+}
