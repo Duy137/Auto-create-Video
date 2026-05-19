@@ -14,6 +14,27 @@ from app.pipeline.nodes.rendering.bgm import resolve_bgm_track_path
 from config import OUTPUT_DIR, REMOTION_DIR
 
 
+def _get_signed_url_for_path(path: Path) -> str:
+	if not path or not path.exists():
+		return ""
+	from api.signed_url import generate_signed_url_token
+	
+	rel_path = None
+	try:
+		rel_path = path.resolve().relative_to(Path(OUTPUT_DIR).resolve()).as_posix()
+	except ValueError:
+		try:
+			rel_path = path.resolve().relative_to((Path(REMOTION_DIR) / "public").resolve()).as_posix()
+		except ValueError:
+			pass
+			
+	if rel_path:
+		token = generate_signed_url_token(rel_path)
+		return f"/api/files/{rel_path}?token={token}"
+	
+	return path.as_uri()
+
+
 async def stage_assets_for_remotion(
 	job_id: str,
 	video_props_dict: dict,
@@ -21,31 +42,25 @@ async def stage_assets_for_remotion(
 ) -> Path:
 	"""Stage assets into remotion/out/bundle/public and return render-ready props path."""
 	logger.info("━━━ Staging Assets for Remotion ━━━")
-	# Assets go into the public dir passed to Remotion via
-	# `--public-dir out/bundle/public`; staticFile("assets/...") resolves there.
 	out_public_dir = Path(REMOTION_DIR) / "out" / "bundle" / "public"
 	
-	# Ensure base static files (sfx, fonts, etc.) from remotion/public are present in the staging dir
 	original_public_dir = Path(REMOTION_DIR) / "public"
 	if original_public_dir.exists():
-		shutil.copytree(str(original_public_dir), str(out_public_dir), dirs_exist_ok=True)
+		shutil.copytree(str(original_public_dir), str(out_public_dir), dirs_exist_ok=True, ignore=shutil.ignore_patterns("assets"))
 		
-	remotion_assets_dir = out_public_dir / "assets" / job_id
+	remotion_assets_dir = job_dir / "media"
 	remotion_assets_dir.mkdir(parents=True, exist_ok=True)
 
-	# Stage audio
 	props_dict = dict(video_props_dict)
+
+	# Stage audio
 	audio_url = props_dict.get("audio_url", "")
 	audio_source = resolve_local_path(audio_url)
 	if audio_source is None or not audio_source.exists():
 		audio_source = job_dir / "audio" / "full.mp3"
 	if not audio_source.exists():
-		raise FileNotFoundError(
-			f"Audio file not found at '{audio_url}' or fallback {audio_source}"
-		)
-	audio_dest = remotion_assets_dir / "full.mp3"
-	shutil.copy2(str(audio_source), str(audio_dest))
-	props_dict["audio_url"] = f"assets/{job_id}/full.mp3"
+		raise FileNotFoundError(f"Audio file not found at '{audio_url}' or fallback {audio_source}")
+	props_dict["audio_url"] = _get_signed_url_for_path(audio_source)
 
 	# Stage optional BGM
 	settings = props_dict.get("settings")
@@ -54,43 +69,33 @@ async def stage_assets_for_remotion(
 		if isinstance(bgm_url, str) and bgm_url:
 			bgm_source = resolve_local_path(bgm_url)
 			if bgm_source and bgm_source.exists():
-				bgm_suffix = bgm_source.suffix.lower() or ".mp3"
-				bgm_dest = remotion_assets_dir / f"bgm{bgm_suffix}"
-				shutil.copy2(str(bgm_source), str(bgm_dest))
-				settings["bgm_url"] = f"assets/{job_id}/{bgm_dest.name}"
+				settings["bgm_url"] = _get_signed_url_for_path(bgm_source)
 
 	# Stage optional custom background
 	if isinstance(settings, dict):
 		custom_bg_url = settings.get("custom_background_url")
 		if isinstance(custom_bg_url, str) and custom_bg_url:
 			bg_source = resolve_local_path(custom_bg_url)
-			# If it's a relative Remotion asset path, resolve from REMOTION_DIR/public
 			if bg_source is None and custom_bg_url.startswith("assets/"):
-				bg_source = Path(REMOTION_DIR) / "out" / "bundle" / "public" / custom_bg_url
+				bg_source = Path(REMOTION_DIR) / "public" / custom_bg_url
 			
 			if bg_source and bg_source.exists():
-				bg_suffix = bg_source.suffix.lower() or ".jpg"
-				bg_dest = remotion_assets_dir / f"custom_bg{bg_suffix}"
-				# Only copy if source and dest are different files
-				try:
-					if bg_source.resolve() != bg_dest.resolve():
-						shutil.copy2(str(bg_source), str(bg_dest))
-						logger.info("  Staged custom background: {} → {}", bg_source, bg_dest)
-					else:
-						logger.info("  Custom background already in place: {}", bg_dest)
-				except Exception as e:
-					logger.warning("  Failed to stage custom background: {}", e)
-					settings["custom_background_url"] = None
-				else:
-					# Verify file exists at destination before committing the URL
-					if bg_dest.exists():
-						settings["custom_background_url"] = f"assets/{job_id}/{bg_dest.name}"
-					else:
-						logger.warning("  Custom background dest missing after staging, clearing URL")
-						settings["custom_background_url"] = None
+				settings["custom_background_url"] = _get_signed_url_for_path(bg_source)
 			else:
-				logger.warning("  Custom background source not found: {}, clearing URL", custom_bg_url)
 				settings["custom_background_url"] = None
+                
+		cta_media_url = settings.get("cta", {}).get("mediaUrl")
+		if isinstance(cta_media_url, str) and cta_media_url:
+			cta_source = resolve_local_path(cta_media_url)
+			if cta_source and cta_source.exists():
+				settings["cta"]["mediaUrl"] = _get_signed_url_for_path(cta_source)
+
+		watermark_logo_url = settings.get("watermark_logo_url")
+		if isinstance(watermark_logo_url, str) and watermark_logo_url:
+			logo_source = resolve_local_path(watermark_logo_url)
+			if logo_source and logo_source.exists():
+				settings["watermark_logo_url"] = _get_signed_url_for_path(logo_source)
+
 
 	# Stage scene media
 	scenes = props_dict.get("scenes", [])
@@ -116,7 +121,7 @@ async def stage_assets_for_remotion(
 			for attempt in range(2):
 				try:
 					await download_media(media_url, str(local_dest), timeout=60)
-					scene["media_url"] = f"assets/{job_id}/{media_filename}"
+					scene["media_url"] = _get_signed_url_for_path(local_dest)
 					logger.info(
 						"  Scene {} media staged ({:.0f}KB)",
 						scene_idx,
@@ -149,12 +154,7 @@ async def stage_assets_for_remotion(
 					local_source = job_dir / "media" / media_filename
 
 			if local_source and local_source.exists():
-				media_filename = f"scene_{scene_idx}{local_source.suffix}"
-				shutil.copy2(
-					str(local_source),
-					str(remotion_assets_dir / media_filename),
-				)
-				scene["media_url"] = f"assets/{job_id}/{media_filename}"
+				scene["media_url"] = _get_signed_url_for_path(local_source)
 			else:
 				logger.warning(
 					"  Media file not found for scene {}: {}",
@@ -162,6 +162,32 @@ async def stage_assets_for_remotion(
 					media_url,
 				)
 				scene["media_url"] = None
+
+	# Update Settings with signed URLs
+	settings = props_dict.get("settings", {})
+	
+	def _resolve_setting_path(url_val: str | None) -> str | None:
+		if not url_val:
+			return url_val
+		if url_val.startswith("http://") or url_val.startswith("https://") or url_val.startswith("/api/files/"):
+			return url_val
+			
+		local_path = resolve_local_path(url_val)
+		if local_path and local_path.exists():
+			return _get_signed_url_for_path(local_path)
+			
+		possible_path = Path(OUTPUT_DIR) / url_val
+		if possible_path.exists():
+			return _get_signed_url_for_path(possible_path)
+			
+		return url_val
+
+	for key in ["bgm_url", "watermark_logo_url", "custom_background_url"]:
+		if settings.get(key):
+			settings[key] = _resolve_setting_path(settings[key])
+			
+	if settings.get("cta") and settings["cta"].get("media_url"):
+		settings["cta"]["media_url"] = _resolve_setting_path(settings["cta"]["media_url"])
 
 	logger.info("=== STAGED RENDER JSON ===")
 	logger.info("  scene_types: {}", [s.get("scene_type") for s in props_dict.get("scenes", [])])
@@ -172,7 +198,7 @@ async def stage_assets_for_remotion(
 		json.dumps(props_dict, indent=2, ensure_ascii=False),
 		encoding="utf-8",
 	)
-	logger.info("  Staged assets to {}", remotion_assets_dir)
+	logger.info("  Staged assets, props saved to {}", render_props_path)
 
 	return render_props_path
 
@@ -199,21 +225,20 @@ def resolve_local_path(url_or_path: str) -> Path | None:
 		relative_path = url_or_path[len("api/outputs/"):]
 		return Path(OUTPUT_DIR) / relative_path
 
-	# Handle signed URLs that leaked into DB (e.g. "/api/files/bgm/x.mp3?token=...")
 	if url_or_path.startswith("/api/files/"):
 		relative_path = url_or_path[len("/api/files/"):]
 		if "?" in relative_path:
 			relative_path = relative_path.split("?", 1)[0]
 		return Path(OUTPUT_DIR) / relative_path
 
-	# Relative paths rooted at OUTPUT_DIR (e.g. "bgm/1_abc123.mp3")
 	if url_or_path.startswith("bgm/"):
 		return Path(OUTPUT_DIR) / url_or_path
 
-	# Handle library BGM URLs: /api/bgm/library/{track_id}/file
+	if url_or_path.startswith("assets/") or url_or_path.startswith("media/") or (len(url_or_path.split("/")) > 1 and url_or_path.split("/")[1] in ["assets", "media"]):
+		return Path(OUTPUT_DIR) / url_or_path
+
 	if "/api/bgm/library/" in url_or_path:
 		parts = url_or_path.split("/")
-		# Find the part after 'library'
 		try:
 			lib_idx = parts.index("library")
 			track_id = parts[lib_idx + 1]

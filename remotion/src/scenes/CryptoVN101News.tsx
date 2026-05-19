@@ -33,6 +33,7 @@ import {
   useVideoConfig,
   interpolate,
   Easing,
+  getRemotionEnvironment,
 } from "remotion";
 import type { SceneData, VideoProps } from "../schemas/videoProps";
 import { fontFamily } from "../lib/fonts";
@@ -50,8 +51,18 @@ interface CryptoVN101NewsProps {
 }
 
 /** Resolve asset URL: local paths use staticFile(), remote URLs pass through */
-function resolveAssetUrl(url: string): string {
-  if (url.startsWith("http://") || url.startsWith("https://") || url.startsWith("/api/")) return url;
+function resolveAssetUrl(url?: string | null): string {
+  if (!url) return "";
+  if (url.startsWith("http") || url.startsWith("data:")) return url;
+  if (url.startsWith("/api/")) {
+    const { isRendering } = getRemotionEnvironment();
+    if (isRendering) {
+      // TODO: Refactor to use process.env.API_URL in production
+      // In Puppeteer context, use absolute URL to hit FastAPI
+      return `http://127.0.0.1:8000${url}`;
+    }
+    return url;
+  }
   return staticFile(url);
 }
 

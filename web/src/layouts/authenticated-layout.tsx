@@ -3,7 +3,7 @@ import { Link, useLocation, useNavigate, Outlet } from "react-router-dom"
 import {
   Sparkles, LayoutDashboard, Plus, Film, Settings,
   Menu, Bell, Search, ChevronDown, ChevronLeft, ChevronRight, Sun, Moon,
-  LogOut, Shield, Users, BarChart3, AlertTriangle, Trash2, X,
+  LogOut, Trash2, X,
 } from "lucide-react"
 import { useTheme } from "next-themes"
 import { useAuth } from "@/context/AuthContext"
@@ -17,9 +17,9 @@ import {
 
 /* ---------------- Sidebar nav config ---------------- */
 const NAV = [
-  { to: "/create",    label: "Tạo video mới",   icon: Plus, accent: true },
+  { to: "/create", label: "Tạo video mới", icon: Plus, accent: true },
   { to: "/dashboard", label: "Bảng điều khiển", icon: LayoutDashboard },
-  { to: "/library",   label: "Thư viện",        icon: Film },
+  { to: "/library", label: "Thư viện", icon: Film },
 ]
 
 /* ---------------- Sidebar ---------------- */
@@ -35,15 +35,6 @@ function Sidebar({
   onToggleCollapsed: () => void
 }) {
   const { pathname } = useLocation()
-  const { user } = useAuth()
-  const isAdmin = user?.role === "admin" || user?.permissions?.includes("*")
-  const tierName = user?.tier === "studio" ? "Studio" : user?.tier === "pro" ? "Pro" : "Starter"
-  const quotaUsed = user?.quota_used_month ?? 0
-  const quotaLimit = user?.quota_limit ?? 3
-  const hasUnlimitedQuota = quotaLimit >= 999999
-  const quotaLimitLabel = hasUnlimitedQuota ? "∞" : quotaLimit.toLocaleString("vi-VN")
-  const usagePercent = hasUnlimitedQuota ? 100 : Math.min(100, (quotaUsed / Math.max(1, quotaLimit)) * 100)
-
   return (
     <>
       {/* Mobile backdrop */}
@@ -178,7 +169,6 @@ function UserMenu() {
   }
 
   const initial = (user?.username || user?.email || "U")[0].toUpperCase()
-  const isAdmin = user?.role === "admin"
 
   return (
     <div ref={wrapRef} className="relative">
@@ -229,6 +219,7 @@ function UserMenu() {
           {/* Menu items */}
           <div className="py-1">
             <MenuItem icon={Settings} label="Hồ sơ & cài đặt" onClick={() => { setOpen(false); navigate("/settings") }} />
+            <MenuItem icon={LogOut} label="Đăng xuất" danger onClick={handleLogout} />
           </div>
         </div>
       )}
@@ -237,7 +228,7 @@ function UserMenu() {
 }
 
 function MenuItem({ icon: Icon, label, onClick, danger }:
-  { icon: any; label: string; onClick: () => void; danger?: boolean }) {
+  { icon: React.ElementType; label: string; onClick: () => void; danger?: boolean }) {
   return (
     <button
       onClick={onClick}
@@ -268,7 +259,7 @@ function Topbar({ onMenu }: { onMenu: () => void }) {
   const location = useLocation()
   const navigate = useNavigate()
   const locationRef = useRef(location)
-  const searchDebounceRef = useRef<ReturnType<typeof window.setTimeout> | null>(null)
+  const searchDebounceRef = useRef<number | null>(null)
   const notificationRef = useRef<HTMLDivElement>(null)
   const [librarySearchDraft, setLibrarySearchDraft] = useState("")
   const [isSearchComposing, setIsSearchComposing] = useState(false)
@@ -284,6 +275,7 @@ function Topbar({ onMenu }: { onMenu: () => void }) {
 
   useEffect(() => {
     if (!isSearchComposing) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setLibrarySearchDraft(librarySearch)
     }
   }, [isSearchComposing, librarySearch])
@@ -311,7 +303,7 @@ function Topbar({ onMenu }: { onMenu: () => void }) {
         setNotifications(data.notifications || [])
         setUnreadCount(Number(data.unread_count || 0))
       })
-      .catch(() => {})
+      .catch(() => { })
 
     return () => {
       cancelled = true
@@ -320,7 +312,7 @@ function Topbar({ onMenu }: { onMenu: () => void }) {
 
   useEffect(() => {
     let es: EventSource | null = null
-    let reconnectTimer: ReturnType<typeof window.setTimeout> | null = null
+    let reconnectTimer: number | null = null
     let alive = true
 
     const connect = () => {
@@ -347,7 +339,9 @@ function Topbar({ onMenu }: { onMenu: () => void }) {
             ...prev.filter((item) => item.id !== nextNotification.id),
           ])
           setUnreadCount((count) => count + 1)
-        } catch {}
+        } catch {
+          // Ignore parse errors
+        }
       }
 
       es.onerror = () => {
@@ -398,7 +392,7 @@ function Topbar({ onMenu }: { onMenu: () => void }) {
           setNotifications(data.notifications || [])
           setUnreadCount(Number(data.unread_count || 0))
         })
-        .catch(() => {})
+        .catch(() => { })
     }
   }
 
@@ -428,7 +422,9 @@ function Topbar({ onMenu }: { onMenu: () => void }) {
       setUnreadCount((count) => Math.max(0, count - 1))
       try {
         await markNotificationRead(notification.id)
-      } catch {}
+      } catch {
+        // Ignore errors
+      }
     }
     if (notification.action_url) {
       navigate(notification.action_url)
@@ -491,7 +487,7 @@ function Topbar({ onMenu }: { onMenu: () => void }) {
             onChange={(event) => {
               const nextValue = event.target.value
               setLibrarySearchDraft(nextValue)
-              if (event.nativeEvent.isComposing || isSearchComposing) return
+              if ((event.nativeEvent as any).isComposing || isSearchComposing) return
               scheduleLibrarySearch(nextValue)
             }}
             onCompositionStart={() => {
