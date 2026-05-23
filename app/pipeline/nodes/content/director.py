@@ -86,9 +86,9 @@ SCENE TYPE OPTIONS: title_card, stock_background, info_card, stats_highlight, di
 SCENE TYPE RULES:
 - "hook" → cryptovn101_news
 - "conclude" → title_card OR stock_background
-- "explain" → media_showcase or stock_background
+- "explain" → media_showcase OR stock_background OR diagram (if conceptually explaining a formula or complex structure)
 - "list_steps" → info_card or timeline
-- "data_visual" → stats_highlight or diagram
+- "data_visual" → stats_highlight (for emphasizing numbers/percentages) OR diagram (for visualizing math formulas, trends, or data charts)
 - "compare" → comparison or info_card
 - emoji_grid: 3-4 SHORT items. info_card: LONGER text.
 
@@ -157,7 +157,7 @@ DIRECTOR_SCHEMA = {
                     },
                     "layout": {
                         "type": "string",
-                        "description": "Layout mode. Required for title_card: standard, news_intro, educational, tutorial, commercial. Optional for others.",
+                        "description": "Layout mode. Required for title_card: news_intro, educational, tutorial, commercial. Optional for others.",
                     },
                 },
                 "required": ["scene_index", "scene_type", "layout"],
@@ -195,7 +195,7 @@ PURPOSE_TO_SCENE_TYPE = {
 }
 
 SCENE_TYPE_DEFAULT_LAYOUT = {
-    "title_card": "standard",
+    "title_card": "news_intro",
     "stock_background": "media_overlay",
     "info_card": "vertical_stack",
     "stats_highlight": "vertical_stack",
@@ -269,7 +269,7 @@ def validate_direction(direction: dict[str, Any], num_scenes: int) -> dict[str, 
     direction_map = {d["scene_index"]: d for d in directions}
 
     valid_layouts = {
-        "title_card": {"center_focus", "standard", "news_intro", "educational", "tutorial", "commercial"},
+        "title_card": {"center_focus", "news_intro", "educational", "tutorial", "commercial"},
         "stock_background": {"media_overlay", "center_focus"},
         "info_card": {"vertical_stack", "grid_2x2", "full_width_cards"},
         "stats_highlight": {"vertical_stack", "hero_number"},

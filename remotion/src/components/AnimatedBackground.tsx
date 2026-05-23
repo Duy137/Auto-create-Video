@@ -53,6 +53,8 @@ interface AnimatedBackgroundProps {
   secondaryColor: string;
   customBackgroundUrl?: string | null;
   customBackgroundType?: "image" | "video";
+  /** Seed for deterministic variation per video */
+  seed?: number;
 }
 
 export const AnimatedBackground: React.FC<AnimatedBackgroundProps> = ({
@@ -61,6 +63,7 @@ export const AnimatedBackground: React.FC<AnimatedBackgroundProps> = ({
   secondaryColor,
   customBackgroundUrl,
   customBackgroundType = "image",
+  seed = 0,
 }) => {
   const frame = useCurrentFrame();
   const hasCustomBg = !!customBackgroundUrl;
@@ -72,9 +75,14 @@ export const AnimatedBackground: React.FC<AnimatedBackgroundProps> = ({
     objectFit: "cover",
   };
 
-  // Slow-moving secondary gradient orb for depth
-  const orbX = 50 + Math.sin(frame * 0.008) * 20;
-  const orbY = 50 + Math.cos(frame * 0.006) * 25;
+  // Seed-based orb movement variation
+  const s = seed >>> 0;
+  const orbSpeedX = 0.006 + (s % 100) * 0.00003;
+  const orbSpeedY = 0.004 + (s % 77) * 0.00004;
+  const orbAmpX = 15 + (s % 13) * 1.5;
+  const orbAmpY = 18 + (s % 11) * 2;
+  const orbX = 50 + Math.sin(frame * orbSpeedX) * orbAmpX;
+  const orbY = 50 + Math.cos(frame * orbSpeedY) * orbAmpY;
 
   return (
     <AbsoluteFill style={{ overflow: "hidden" }}>
@@ -109,10 +117,11 @@ export const AnimatedBackground: React.FC<AnimatedBackgroundProps> = ({
         </>
       )}
 
-      {/* Layer 3: Floating particles (reduced opacity when custom bg) */}
+      {/* Layer 3: Floating particles (with seed for variation) */}
       <FloatingParticles
         primaryColor={primaryColor}
         secondaryColor={secondaryColor}
+        seed={seed}
       />
 
       {/* Layer 4: Vignette — darken edges (softer on custom bg) */}

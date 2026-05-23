@@ -20,6 +20,8 @@ interface FloatingParticlesProps {
   density?: number;
   /** Base opacity multiplier (default: 1.0, range 0-1) */
   baseOpacity?: number;
+  /** Seed for deterministic variation per video (default: 0 = no variation) */
+  seed?: number;
 }
 
 export const FloatingParticles: React.FC<FloatingParticlesProps> = ({
@@ -27,20 +29,22 @@ export const FloatingParticles: React.FC<FloatingParticlesProps> = ({
   secondaryColor,
   density = DEFAULT_PARTICLE_COUNT,
   baseOpacity = 1.0,
+  seed = 0,
 }) => {
   const frame = useCurrentFrame();
 
-  // Deterministic particle properties (golden-angle distribution)
+  // Deterministic particle properties (golden-angle distribution + seed offset)
+  const s = seed >>> 0; // ensure unsigned
   const particles = Array.from({ length: density }, (_, i) => ({
-    x: (i * 137.508) % 100,
-    y: (i * 91.1) % 100,
-    size: 2 + (i % 7) * 3,
-    verticalSpeed: 0.3 + (i % 5) * 0.12,
-    horizontalSpeed: 0.6 + (i % 4) * 0.2,
-    opacity: 0.08 + (i % 5) * 0.03,
-    blur: 2 + (i % 3) * 2,
-    phase: i * 2.1,
-    driftAmplitude: 6 + (i % 4) * 3,
+    x: (i * 137.508 + s * 17.3) % 100,
+    y: (i * 91.1 + s * 23.7) % 100,
+    size: 2 + ((i + s) % 7) * 3,
+    verticalSpeed: 0.3 + ((i + s) % 5) * 0.12,
+    horizontalSpeed: 0.6 + ((i + s) % 4) * 0.2,
+    opacity: 0.08 + ((i + s) % 5) * 0.03,
+    blur: 2 + ((i + s) % 3) * 2,
+    phase: i * 2.1 + s * 0.7,
+    driftAmplitude: 6 + ((i + s) % 4) * 3,
   }));
 
   return (

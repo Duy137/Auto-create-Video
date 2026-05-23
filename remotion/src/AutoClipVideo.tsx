@@ -50,6 +50,8 @@ import { ProgressBar } from "./components/ProgressBar";
 import { Watermark } from "./components/Watermark";
 import { camelizeKeys } from "./lib/utils";
 import { getTransition } from "./lib/transitions";
+import { hashJobId, seededRandom, seededInt, seededPick } from "./lib/seed";
+import { shiftHue } from "./lib/color";
 
 type AutoClipVideoProps = VideoProps;
 
@@ -75,12 +77,13 @@ const SceneRenderer: React.FC<{
   wordTimestamps: VideoProps["wordTimestamps"];
   brandLogoUrl?: string | null;
   brandName?: string | null;
-}> = ({ scene, colorPalette, wordTimestamps, brandLogoUrl, brandName }) => {
+  jobId?: string;
+}> = ({ scene, colorPalette, wordTimestamps, brandLogoUrl, brandName, jobId }) => {
   switch (scene.sceneType) {
     case "title_card":
       return <TitleCard scene={scene} colorPalette={colorPalette} brandLogoUrl={brandLogoUrl} brandName={brandName} />;
     case "stock_background":
-      return <StockBackground scene={scene} colorPalette={colorPalette} wordTimestamps={wordTimestamps} />;
+      return <StockBackground scene={scene} colorPalette={colorPalette} wordTimestamps={wordTimestamps} jobId={jobId} />;
     case "info_card":
       return <InfoCard scene={scene} colorPalette={colorPalette} wordTimestamps={wordTimestamps} />;
     case "stats_highlight":
@@ -92,24 +95,21 @@ const SceneRenderer: React.FC<{
     case "comparison":
       return <Comparison scene={scene} colorPalette={colorPalette} wordTimestamps={wordTimestamps} />;
     case "media_showcase":
-      return <MediaShowcase scene={scene} colorPalette={colorPalette} />;
+      return <MediaShowcase scene={scene} colorPalette={colorPalette} jobId={jobId} />;
     case "timeline":
       return <Timeline scene={scene} colorPalette={colorPalette} wordTimestamps={wordTimestamps} />;
     case "cryptovn101_news": // [CryptoVN Custom]
-      return <CryptoVN101News scene={scene} colorPalette={colorPalette} />;
+      return <CryptoVN101News scene={scene} colorPalette={colorPalette} jobId={jobId} />;
     case "story_beats":
       return <StoryBeats scene={scene} colorPalette={colorPalette} wordTimestamps={wordTimestamps} />;
     default:
-      return <StockBackground scene={scene} colorPalette={colorPalette} wordTimestamps={wordTimestamps} />;
+      return <StockBackground scene={scene} colorPalette={colorPalette} wordTimestamps={wordTimestamps} jobId={jobId} />;
   }
 };
 
-const getTransitionDurationFrames = (
+const getBaseTransitionDuration = (
   sceneType: VideoProps["scenes"][0]["sceneType"],
-  transitionName: string,
 ): number => {
-  if (transitionName === "none") return 0;
-
   switch (sceneType) {
     case "title_card":
       return 20;
@@ -143,16 +143,19 @@ const getTransitionTiming = (
   sceneType: VideoProps["scenes"][0]["sceneType"],
   transitionName: string,
   durationInFrames: number,
+  seed: number,
+  sceneIndex: number,
 ) => {
+  const key = sceneIndex * 100 + 40;
   switch (transitionName) {
     case "slide":
     case "zoom":
       return springTiming({
         durationInFrames,
         config: {
-          damping: 18,
-          stiffness: 140,
-          mass: 0.9,
+          damping: 18 + (seededRandom(seed, key) - 0.5) * 4,        // 16-20
+          stiffness: 140 + (seededRandom(seed, key + 1) - 0.5) * 30, // 125-155
+          mass: 0.9 + (seededRandom(seed, key + 2) - 0.5) * 0.2,    // 0.8-1.0
         },
       });
     case "wipe":
@@ -178,6 +181,8 @@ const SceneWithEntryMotion: React.FC<{
   outgoingTransitionDuration: number;
   brandLogoUrl?: string | null;
   brandName?: string | null;
+  seed: number;
+  jobId?: string;
 }> = ({
   scene,
   colorPalette,
@@ -187,19 +192,33 @@ const SceneWithEntryMotion: React.FC<{
   outgoingTransitionDuration,
   brandLogoUrl,
   brandName,
+  seed,
+  jobId,
 }) => {
   const frame = useCurrentFrame();
+  const sceneKey = scene.sceneIndex * 100;
   const incomingTransitionName = scene.transition ?? "fade";
   const isIncomingZoom = incomingTransitionName === "zoom";
 
+  // Seed-based entry motion variation (Hướng C: randomize params, not types)
+  const entryScaleStart = isIncomingZoom
+    ? 0.88 + seededRandom(seed, sceneKey + 10) * 0.08  // 0.88-0.96
+    : 1;
+  const entryDuration = isIncomingZoom
+    ? 12 + seededInt(seed, sceneKey + 11, 0, 8)         // 12-20 frames
+    : 0;
+  const entryFadeDuration = isIncomingZoom
+    ? 8 + seededInt(seed, sceneKey + 12, 0, 6)          // 8-14 frames
+    : 0;
+
   const entryScale = isIncomingZoom
-    ? interpolate(frame, [0, 16], [0.94, 1], {
+    ? interpolate(frame, [0, entryDuration], [entryScaleStart, 1], {
         extrapolateLeft: "clamp",
         extrapolateRight: "clamp",
       })
     : 1;
   const entryOpacity = isIncomingZoom
-    ? interpolate(frame, [0, 12], [0.7, 1], {
+    ? interpolate(frame, [0, entryFadeDuration], [0.7, 1], {
         extrapolateLeft: "clamp",
         extrapolateRight: "clamp",
       })
@@ -211,7 +230,10 @@ const SceneWithEntryMotion: React.FC<{
     0,
     sequenceDurationFrames - outgoingTransitionDuration
   );
-  const exitStrength = outgoingTransitionName === "zoom" ? 1 : 0.7;
+  // Seed-based exit strength variation: 0.5-1.0
+  const exitStrength = hasOutgoingTransition
+    ? 0.5 + seededRandom(seed, sceneKey + 20) * 0.5
+    : 0;
 
   const exitScale = hasOutgoingTransition
     ? interpolate(
@@ -251,7 +273,7 @@ const SceneWithEntryMotion: React.FC<{
         opacity: entryOpacity * exitOpacity,
       }}
     >
-      <SceneRenderer scene={scene} colorPalette={colorPalette} wordTimestamps={wordTimestamps} brandLogoUrl={brandLogoUrl} brandName={brandName} />
+      <SceneRenderer scene={scene} colorPalette={colorPalette} wordTimestamps={wordTimestamps} brandLogoUrl={brandLogoUrl} brandName={brandName} jobId={jobId} />
       {/* Emoji pop-up overlay (per-scene, not on title_card) */}
       {scene.emoji && scene.sceneType !== "title_card" && (
         <EmojiPopup
@@ -278,6 +300,9 @@ export const AutoClipVideo: React.FC<AutoClipVideoProps> = (rawProps) => {
     settings,
   } = props;
 
+  // Diversity seed — deterministic per video, all randomization flows from this
+  const seed = hashJobId(props.jobId ?? "");
+
   // Since AnimatedBackground (Layer 0) renders the preset gradient,
   // we must make the scene background transparent so it shows through.
   const effectivePalette = { ...colorPalette, background: "transparent" };
@@ -291,59 +316,77 @@ export const AutoClipVideo: React.FC<AutoClipVideoProps> = (rawProps) => {
         secondaryColor={colorPalette.secondary}
         customBackgroundUrl={settings.customBackgroundUrl}
         customBackgroundType={settings.customBackgroundType}
+        seed={seed}
       />
       {/* Layer 1: Scene sequences with transitions */}
       <TransitionSeries>
-        {scenes.map((scene, index) => {
-          const durationFrames = getSceneDurationFrames(scene, fps);
+        {(() => {
+          // Budget constraint: cumulative jitter clamped to [-4, +4] frames
+          let jitterBudget = 0;
+          return scenes.map((scene, index) => {
+            const durationFrames = getSceneDurationFrames(scene, fps);
+            const nextScene = scenes[index + 1] ?? null;
+            const nextTransitionName = nextScene?.transition ?? "fade";
+            const hasTransition =
+              index < scenes.length - 1 && nextTransitionName !== "none";
 
-          const nextScene = scenes[index + 1] ?? null;
-          const nextTransitionName = nextScene?.transition ?? "fade";
-          const hasTransition =
-            index < scenes.length - 1 && nextTransitionName !== "none";
-          const transitionDurationFrames = hasTransition
-            ? getTransitionDurationFrames(nextScene!.sceneType, nextTransitionName)
-            : 0;
+            // Seed-based transition duration jitter (±2 frames)
+            let transitionDurationFrames = 0;
+            if (hasTransition) {
+              const baseDur = getBaseTransitionDuration(nextScene!.sceneType);
+              const jitter = seededInt(seed, index * 100 + 1, -2, 2);
+              if (Math.abs(jitterBudget + jitter) > 4) {
+                transitionDurationFrames = baseDur; // reset if budget exceeded
+              } else {
+                jitterBudget += jitter;
+                transitionDurationFrames = Math.max(8, baseDur + jitter);
+              }
+            }
 
-          // Compensate for TransitionSeries overlap: each transition
-          // "eats" transitionDurationFrames from the total timeline,
-          // causing visuals to run ahead of audio/captions.
-          // Adding the transition duration to every non-last scene
-          // keeps the visual timeline aligned with the absolute
-          // audio + caption timeline.
-          const compensatedDuration =
-            index < scenes.length - 1
-              ? durationFrames + transitionDurationFrames
-              : durationFrames;
+            const compensatedDuration =
+              index < scenes.length - 1
+                ? durationFrames + transitionDurationFrames
+                : durationFrames;
 
-          return (
-            <React.Fragment key={scene.sceneIndex}>
-              <TransitionSeries.Sequence durationInFrames={compensatedDuration}>
-                <SceneWithEntryMotion
-                  scene={scene}
-                  colorPalette={effectivePalette}
-                  wordTimestamps={props.wordTimestamps}
-                  sequenceDurationFrames={compensatedDuration}
-                  outgoingTransitionName={hasTransition ? nextTransitionName : "none"}
-                  outgoingTransitionDuration={transitionDurationFrames}
-                  brandLogoUrl={props.brandLogoUrl}
-                  brandName={props.brandName}
-                />
-              </TransitionSeries.Sequence>
-              {/* Add transition between scenes (not after the last one) */}
-              {hasTransition && (
-                <TransitionSeries.Transition
-                  presentation={getTransition(nextTransitionName)}
-                  timing={getTransitionTiming(
-                    nextScene!.sceneType,
-                    nextTransitionName,
-                    transitionDurationFrames
-                  )}
-                />
-              )}
-            </React.Fragment>
-          );
-        })}
+            // Per-scene color micro-shift (±3% hue on primary/secondary only)
+            const shiftedPalette = {
+              ...effectivePalette,
+              primary: shiftHue(colorPalette.primary, seed, index * 100 + 60),
+              secondary: shiftHue(colorPalette.secondary, seed, index * 100 + 61),
+            };
+
+            return (
+              <React.Fragment key={scene.sceneIndex}>
+                <TransitionSeries.Sequence durationInFrames={compensatedDuration}>
+                  <SceneWithEntryMotion
+                    scene={scene}
+                    colorPalette={shiftedPalette}
+                    wordTimestamps={props.wordTimestamps}
+                    sequenceDurationFrames={compensatedDuration}
+                    outgoingTransitionName={hasTransition ? nextTransitionName : "none"}
+                    outgoingTransitionDuration={transitionDurationFrames}
+                    brandLogoUrl={props.brandLogoUrl}
+                    brandName={props.brandName}
+                    seed={seed}
+                    jobId={props.jobId}
+                  />
+                </TransitionSeries.Sequence>
+                {hasTransition && (
+                  <TransitionSeries.Transition
+                    presentation={getTransition(nextTransitionName, seed, index)}
+                    timing={getTransitionTiming(
+                      nextScene!.sceneType,
+                      nextTransitionName,
+                      transitionDurationFrames,
+                      seed,
+                      index,
+                    )}
+                  />
+                )}
+              </React.Fragment>
+            );
+          });
+        })()}
 
         {/* CTA Scene — appended to end of TransitionSeries */}
         {settings.cta?.enabled && settings.cta?.mediaUrl && (() => {
@@ -393,19 +436,34 @@ export const AutoClipVideo: React.FC<AutoClipVideoProps> = (rawProps) => {
         <Audio src={resolveAssetUrl(audioUrl)} volume={() => 1} />
       )}
 
-      {/* Layer 2.5: SFX (scene transition sound effects) — OUTSIDE TransitionSeries */}
-      {settings.sfx?.enabled && scenes.map((scene, i) => {
-        if (i === 0) return null; // No SFX on first scene
-        const absFrame = Math.ceil((scene.startMs / 1000) * fps);
-        return (
-          <Sequence key={`sfx-${i}`} from={Math.max(0, absFrame - 5)} durationInFrames={30}>
-            <Audio
-              src={staticFile("sfx/whoosh.mp3")}
-              volume={() => settings.sfx?.volume ?? 0.25}
-            />
-          </Sequence>
-        );
-      })}
+      {/* Layer 2.5: SFX variety pool — maps by transition type + seed */}
+      {settings.sfx?.enabled && (() => {
+        const SFX_MAP: Record<string, readonly string[]> = {
+          fade: ["sfx/whoosh.mp3"],
+          slide: ["sfx/whoosh.mp3", "sfx/pop.mp3"],
+          wipe: ["sfx/whoosh.mp3"],
+          zoom: ["sfx/whoosh.mp3", "sfx/ding.mp3"],
+          flip: ["sfx/pop.mp3"],
+          iris: ["sfx/pop.mp3", "sfx/ding.mp3"],
+          "clock-wipe": ["sfx/ding.mp3"],
+          none: ["sfx/whoosh.mp3"],
+        };
+        return scenes.map((scene, i) => {
+          if (i === 0) return null;
+          const transition = scene.transition ?? "fade";
+          const candidates = SFX_MAP[transition] ?? SFX_MAP.fade;
+          const sfxFile = seededPick(seed, i * 100 + 50, candidates);
+          const absFrame = Math.ceil((scene.startMs / 1000) * fps);
+          return (
+            <Sequence key={`sfx-${i}`} from={Math.max(0, absFrame - 5)} durationInFrames={30}>
+              <Audio
+                src={staticFile(sfxFile)}
+                volume={() => settings.sfx?.volume ?? 0.25}
+              />
+            </Sequence>
+          );
+        });
+      })()}
 
       {/* Layer 2.5: BGM (background music) */}
       {settings.bgmUrl && (
@@ -428,11 +486,18 @@ export const AutoClipVideo: React.FC<AutoClipVideoProps> = (rawProps) => {
         />
       )}
 
-      {/* Layer 4: Progress bar */}
-      <ProgressBar
-        color={colorPalette.primary}
-        secondaryColor={colorPalette.secondary}
-      />
+      {/* Layer 4: Progress bar (variant selected by seed) */}
+      {(() => {
+        const PROGRESS_VARIANTS = ["line", "dots", "segmented"] as const;
+        const progressVariant = seededPick(seed, 99, PROGRESS_VARIANTS);
+        return (
+          <ProgressBar
+            color={colorPalette.primary}
+            secondaryColor={colorPalette.secondary}
+            variant={progressVariant}
+          />
+        );
+      })()}
     </AbsoluteFill>
   );
 };

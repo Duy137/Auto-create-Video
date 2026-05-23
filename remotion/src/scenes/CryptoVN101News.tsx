@@ -38,6 +38,8 @@ import {
 import type { SceneData, VideoProps } from "../schemas/videoProps";
 import { fontFamily } from "../lib/fonts";
 import { useExitAnimation } from "../lib/useExitAnimation";
+import { hashJobId, seededInt } from "../lib/seed";
+import { KENBURNS_PRESETS, VIDEO_DRIFT_PRESETS } from "../lib/kenburns";
 
 // ── Constants ──
 
@@ -48,6 +50,7 @@ const OVERLAY_BG_FILE = "cryptovn101-overlay-bg.jpeg";
 interface CryptoVN101NewsProps {
   scene: SceneData;
   colorPalette: VideoProps["colorPalette"];
+  jobId?: string;
 }
 
 /** Resolve asset URL: local paths use staticFile(), remote URLs pass through */
@@ -69,6 +72,7 @@ function resolveAssetUrl(url?: string | null): string {
 export const CryptoVN101News: React.FC<CryptoVN101NewsProps> = ({
   scene,
   colorPalette,
+  jobId,
 }) => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
@@ -79,31 +83,51 @@ export const CryptoVN101News: React.FC<CryptoVN101NewsProps> = ({
     Math.round(((scene.endMs - scene.startMs) / 1000) * fps),
   );
 
+  // Diversity seed
+  const seed = hashJobId(jobId ?? "");
+  const sceneKey = scene.sceneIndex * 100;
+
   // ── Global fade-in ──
   const fadeIn = interpolate(frame, [0, 12], [0, 1], {
     extrapolateRight: "clamp",
   });
 
-  // ── Ken Burns effect for images (zoom-in + pan) ──
+  // ── Ken Burns effect for images (5 presets) ──
   const isImage = scene.mediaType === "image";
   const progress = interpolate(frame, [0, sceneDurationFrames], [0, 1], {
     extrapolateLeft: "clamp",
     extrapolateRight: "clamp",
   });
   const eased = Easing.inOut(Easing.ease)(progress);
+
+  const kbIdx = seededInt(seed, sceneKey + 30, 0, KENBURNS_PRESETS.length - 1);
+  const kb = KENBURNS_PRESETS[kbIdx];
   const kenBurnsScale = isImage
-    ? interpolate(eased, [0, 1], [1.0, 1.12], { extrapolateRight: "clamp" })
+    ? interpolate(eased, [0, 1], [kb.scaleFrom, kb.scaleTo], { extrapolateRight: "clamp" })
     : 1;
   const kenBurnsPanX = isImage
-    ? interpolate(eased, [0, 1], [0, -40], { extrapolateRight: "clamp" })
+    ? interpolate(eased, [0, 1], [kb.panXFrom, kb.panXTo], { extrapolateRight: "clamp" })
     : 0;
 
-  // ── Brand overlay slide-up ──
-  const overlayTranslateY = interpolate(frame, [5, 25], [80, 0], {
+  // ── Video subtle drift (for video media) ──
+  const vdIdx = seededInt(seed, sceneKey + 35, 0, VIDEO_DRIFT_PRESETS.length - 1);
+  const vd = VIDEO_DRIFT_PRESETS[vdIdx];
+  const videoDriftScale = !isImage
+    ? interpolate(eased, [0, 1], [1.0, vd.scaleTo], { extrapolateRight: "clamp" })
+    : 1;
+  const videoDriftPanX = !isImage
+    ? interpolate(eased, [0, 1], [0, vd.panXTo], { extrapolateRight: "clamp" })
+    : 0;
+
+  // ── Brand overlay slide-up (randomized timing) ──
+  const overlayStartY = 60 + seededInt(seed, sceneKey + 70, 0, 40);      // 60-100
+  const overlayStartFrame = Math.max(0, 5 + seededInt(seed, sceneKey + 71, -5, 5)); // 0-10
+  const overlayEndFrame = overlayStartFrame + 20;
+  const overlayTranslateY = interpolate(frame, [overlayStartFrame, overlayEndFrame], [overlayStartY, 0], {
     extrapolateLeft: "clamp",
     extrapolateRight: "clamp",
   });
-  const overlayOpacity = interpolate(frame, [5, 20], [0, 1], {
+  const overlayOpacity = interpolate(frame, [overlayStartFrame, overlayStartFrame + 15], [0, 1], {
     extrapolateLeft: "clamp",
     extrapolateRight: "clamp",
   });
@@ -114,8 +138,9 @@ export const CryptoVN101News: React.FC<CryptoVN101NewsProps> = ({
     extrapolateRight: "clamp",
   });
 
-  // ── Accent line width animation ──
-  const accentWidth = interpolate(frame, [15, 35], [0, 80], {
+  // ── Accent line width animation (randomized max width) ──
+  const accentMaxWidth = 60 + seededInt(seed, sceneKey + 72, 0, 40);     // 60-100
+  const accentWidth = interpolate(frame, [15, 35], [0, accentMaxWidth], {
     extrapolateLeft: "clamp",
     extrapolateRight: "clamp",
   });
@@ -142,16 +167,19 @@ export const CryptoVN101News: React.FC<CryptoVN101NewsProps> = ({
       >
         {hasMedia ? (
           scene.mediaType === "video" ? (
-            <OffthreadVideo
-              src={resolveAssetUrl(scene.mediaUrl!)}
-              style={{
-                width: "100%",
-                height: "100%",
-                objectFit: "cover",
-                objectPosition: "center",
-              }}
-              muted
-            />
+            <div style={{ width: "100%", height: "100%", overflow: "hidden" }}>
+              <OffthreadVideo
+                src={resolveAssetUrl(scene.mediaUrl!)}
+                style={{
+                  width: "100%",
+                  height: "100%",
+                  objectFit: "cover",
+                  objectPosition: "center",
+                  transform: `scale(${videoDriftScale}) translateX(${videoDriftPanX}px)`,
+                }}
+                muted
+              />
+            </div>
           ) : (
             <div
               style={{
