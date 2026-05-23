@@ -18,25 +18,40 @@ import {
   interpolate,
   staticFile,
   Easing,
+  getRemotionEnvironment,
 } from "remotion";
 import type { SceneData, VideoProps } from "../schemas/videoProps";
 import { fontFamily } from "../lib/fonts";
 import { useExitAnimation } from "../lib/useExitAnimation";
+import { hashJobId, seededInt } from "../lib/seed";
+import { KENBURNS_PRESETS, VIDEO_DRIFT_PRESETS } from "../lib/kenburns";
 
 interface MediaShowcaseProps {
   scene: SceneData;
   colorPalette: VideoProps["colorPalette"];
+  jobId?: string;
 }
 
 /** Resolve asset URL: local paths use staticFile(), remote URLs pass through */
-function resolveAssetUrl(url: string): string {
-  if (url.startsWith("http://") || url.startsWith("https://") || url.startsWith("/api/")) return url;
+function resolveAssetUrl(url?: string | null): string {
+  if (!url) return "";
+  if (url.startsWith("http") || url.startsWith("data:")) return url;
+  if (url.startsWith("/api/")) {
+    const { isRendering } = getRemotionEnvironment();
+    if (isRendering) {
+      // TODO: Refactor to use process.env.API_URL in production
+      // In Puppeteer context, use absolute URL to hit FastAPI
+      return `http://127.0.0.1:8000${url}`;
+    }
+    return url;
+  }
   return staticFile(url);
 }
 
 export const MediaShowcase: React.FC<MediaShowcaseProps> = ({
   scene,
   colorPalette,
+  jobId,
 }) => {
   const frame = useCurrentFrame();
   const { fps, width, height } = useVideoConfig();
@@ -55,18 +70,34 @@ export const MediaShowcase: React.FC<MediaShowcaseProps> = ({
     extrapolateRight: "clamp",
   });
 
-  // Ken Burns — stronger for images, disabled for video
+  // Ken Burns — 5 directional presets, chosen by seed + scene index
   const isImage = scene.mediaType === "image";
   const sceneProgress = interpolate(frame, [0, sceneDurationFrames], [0, 1], {
     extrapolateLeft: "clamp",
     extrapolateRight: "clamp",
   });
   const easedProgress = Easing.inOut(Easing.ease)(sceneProgress);
+
+  const KENBURNS = KENBURNS_PRESETS;
+  const kbSeed = hashJobId(jobId ?? "");
+  const kbIdx = seededInt(kbSeed, scene.sceneIndex * 100 + 30, 0, KENBURNS.length - 1);
+  const kb = KENBURNS[kbIdx];
+
   const kenBurnsScale = isImage
-    ? interpolate(easedProgress, [0, 1], [1.0, 1.25], { extrapolateRight: "clamp" })
+    ? interpolate(easedProgress, [0, 1], [kb.scaleFrom, kb.scaleTo], { extrapolateRight: "clamp" })
     : 1;
   const kenBurnsPanX = isImage
-    ? interpolate(easedProgress, [0, 1], [0, -25], { extrapolateRight: "clamp" })
+    ? interpolate(easedProgress, [0, 1], [kb.panXFrom, kb.panXTo], { extrapolateRight: "clamp" })
+    : 0;
+
+  // Video subtle drift — very light movement to break static frame fingerprint
+  const vdIdx = seededInt(kbSeed, scene.sceneIndex * 100 + 35, 0, VIDEO_DRIFT_PRESETS.length - 1);
+  const vd = VIDEO_DRIFT_PRESETS[vdIdx];
+  const videoDriftScale = !isImage
+    ? interpolate(easedProgress, [0, 1], [1.0, vd.scaleTo], { extrapolateRight: "clamp" })
+    : 1;
+  const videoDriftPanX = !isImage
+    ? interpolate(easedProgress, [0, 1], [0, vd.panXTo], { extrapolateRight: "clamp" })
     : 0;
 
   const hasMedia = scene.mediaUrl != null;
@@ -78,11 +109,16 @@ export const MediaShowcase: React.FC<MediaShowcaseProps> = ({
         {hasMedia ? (
           <AbsoluteFill style={{ overflow: "hidden" }}>
             {scene.mediaType === "video" ? (
-              <OffthreadVideo
-                src={resolveAssetUrl(scene.mediaUrl!)}
-                style={{ width: "100%", height: "100%", objectFit: "cover" }}
-                muted
-              />
+              <div style={{ width: "100%", height: "100%", overflow: "hidden" }}>
+                <OffthreadVideo
+                  src={resolveAssetUrl(scene.mediaUrl!)}
+                  style={{
+                    width: "100%", height: "100%", objectFit: "cover",
+                    transform: `scale(${videoDriftScale}) translateX(${videoDriftPanX}px)`,
+                  }}
+                  muted
+                />
+              </div>
             ) : (
               <Img
                 src={resolveAssetUrl(scene.mediaUrl!)}
@@ -132,15 +168,17 @@ export const MediaShowcase: React.FC<MediaShowcaseProps> = ({
             position: "relative",
           }}>
             {scene.mediaType === "video" ? (
-              <OffthreadVideo
-                src={resolveAssetUrl(scene.mediaUrl!)}
-                style={{
-                  width: "100%",
-                  display: "block",
-                  transform: `scale(${kenBurnsScale}) translateX(${kenBurnsPanX}px)`,
-                }}
-                muted
-              />
+              <div style={{ width: "100%", overflow: "hidden" }}>
+                <OffthreadVideo
+                  src={resolveAssetUrl(scene.mediaUrl!)}
+                  style={{
+                    width: "100%",
+                    display: "block",
+                    transform: `scale(${videoDriftScale}) translateX(${videoDriftPanX}px)`,
+                  }}
+                  muted
+                />
+              </div>
             ) : (
               <Img
                 src={resolveAssetUrl(scene.mediaUrl!)}
@@ -272,16 +310,18 @@ export const MediaShowcase: React.FC<MediaShowcaseProps> = ({
       >
         {hasMedia ? (
           scene.mediaType === "video" ? (
-            <OffthreadVideo
-              src={resolveAssetUrl(scene.mediaUrl!)}
-              style={{
-                width: "100%",
-                height: "100%",
-                objectFit: "cover",
-                transform: `scale(${kenBurnsScale}) translateX(${kenBurnsPanX}px)`,
-              }}
-              muted
-            />
+            <div style={{ width: "100%", height: "100%", overflow: "hidden" }}>
+              <OffthreadVideo
+                src={resolveAssetUrl(scene.mediaUrl!)}
+                style={{
+                  width: "100%",
+                  height: "100%",
+                  objectFit: "cover",
+                  transform: `scale(${videoDriftScale}) translateX(${videoDriftPanX}px)`,
+                }}
+                muted
+              />
+            </div>
           ) : (
             <Img
               src={resolveAssetUrl(scene.mediaUrl!)}

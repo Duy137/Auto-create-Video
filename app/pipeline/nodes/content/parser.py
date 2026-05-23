@@ -75,7 +75,7 @@ STRICT RULES:
 8. The first scene should have purpose "hook". The last MAY have purpose "conclude".
 9. Use "explain" for narrative paragraphs that describe or explain a concept.
 10. Use "list_steps" when there are listed items, steps, sequential events, or chronological milestones.
-11. Use "data_visual" when there are statistics or numbers to emphasize.
+11. Use "data_visual" when there are statistics, numbers, or mathematical formulas to emphasize.
 12. Use "compare" when text clearly compares two things (A vs B, pros/cons, before/after).
 13. Identify keywords_to_highlight: important terms (2-5 per scene).
 14. Identify english_phrases: English words that appear in the text.
@@ -160,6 +160,7 @@ RULES:
 9. diagram_spec: ONLY for scenes with scene_type="diagram".
    - If narration mentions math expressions: set type="math_formula", provide LaTeX in "latex" field.
    - Example: "e mũ x" → latex: "e^{x}"
+   - If narration mentions charts/graphs (e.g., "biểu đồ", "đồ thị"): set type="line_chart" or "bar_chart", provide data points in "data" field (estimate numbers if not present in text).
 10. comparison_sides: ONLY for scenes with scene_type="comparison". Generate exactly 2 sides.
     Each side: label (max 20 chars), points array (3-5 items, each max 30 chars), sentiment ("positive", "negative", or "neutral").
     ALL text (label, points) MUST be in the SAME language as the narration text.
@@ -619,7 +620,7 @@ Types to generate for each scene:
 3. timeline → {"timeline_events": [...]}  (3-5 events with "label", "title", "description")
 4. stats_highlight → {"stats": [...]}  (1-3 items with "value" like "300%" or "3 bước", "label", "color" hex)
 5. comparison → {"comparison_sides": [...]}  (2 sides with "label", "points" array, "sentiment": positive/negative/neutral)
-6. diagram → {"diagram_spec": {...}}  (bar_chart or line_chart — estimate numbers if narration has none)
+6. diagram → {"diagram_spec": {...}} (If text describes a math formula/equation, use type="math_formula" and output LaTeX. Otherwise use bar_chart or line_chart and estimate numbers)
 7. story_beats → {"story_beats": [...]}  (3-5 beats with "text", "emoji", "start_ms": 0, "end_ms": 0)
 
 Rules:

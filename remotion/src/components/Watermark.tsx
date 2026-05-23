@@ -5,7 +5,7 @@
  */
 
 import React from "react";
-import { Img, interpolate, staticFile, useCurrentFrame, useVideoConfig } from "remotion";
+import { Img, interpolate, staticFile, useCurrentFrame, useVideoConfig, getRemotionEnvironment } from "remotion";
 import { fontFamily } from "../lib/fonts";
 
 interface WatermarkProps {
@@ -38,8 +38,18 @@ const withHexAlpha = (hexColor: string, alpha: number): string => {
   return `${hexColor}${alphaHex}`;
 };
 
-function resolveUrl(url: string): string {
-  if (url.startsWith("http://") || url.startsWith("https://") || url.startsWith("/api/")) return url;
+function resolveUrl(url?: string | null): string {
+  if (!url) return "";
+  if (url.startsWith("http") || url.startsWith("data:")) return url;
+  if (url.startsWith("/api/")) {
+    const { isRendering } = getRemotionEnvironment();
+    if (isRendering) {
+      // TODO: Refactor to use process.env.API_URL in production
+      // In Puppeteer context, use absolute URL to hit FastAPI
+      return `http://127.0.0.1:8000${url}`;
+    }
+    return url;
+  }
   return staticFile(url);
 }
 

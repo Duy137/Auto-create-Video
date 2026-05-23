@@ -20,6 +20,8 @@ import { BackgroundVideo } from "../components/BackgroundVideo";
 import type { SceneData, VideoProps } from "../schemas/videoProps";
 import { fontFamily } from "../lib/fonts";
 import { useExitAnimation } from "../lib/useExitAnimation";
+import { hashJobId, seededInt } from "../lib/seed";
+import { KENBURNS_SUBTLE_PRESETS } from "../lib/kenburns";
 
 interface WordTimestamp {
   text: string;
@@ -31,6 +33,7 @@ interface StockBackgroundProps {
   scene: SceneData;
   colorPalette: VideoProps["colorPalette"];
   wordTimestamps?: WordTimestamp[];
+  jobId?: string;
 }
 
 // ── Shared: chunk words into display lines by character count ──
@@ -224,6 +227,7 @@ export const StockBackground: React.FC<StockBackgroundProps> = ({
   scene,
   colorPalette,
   wordTimestamps = [],
+  jobId,
 }) => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
@@ -233,6 +237,9 @@ export const StockBackground: React.FC<StockBackgroundProps> = ({
     1,
     Math.round(((scene.endMs - scene.startMs) / 1000) * fps)
   );
+
+  // Diversity seed
+  const seed = hashJobId(jobId ?? "");
 
   // Fade in
   const opacity = interpolate(frame, [0, 15], [0, 1], {
@@ -250,14 +257,16 @@ export const StockBackground: React.FC<StockBackgroundProps> = ({
   });
   const easedProgress = Easing.inOut(Easing.ease)(sceneProgress);
 
-  // Ken Burns effect — subtle zoom + pan (only for media_overlay)
-  const kenBurnsScale = interpolate(easedProgress, [0, 1], [1, 1.09], {
+  // Ken Burns effect — subtle presets (blurred background, so lighter)
+  const kbIdx = seededInt(seed, scene.sceneIndex * 100 + 30, 0, KENBURNS_SUBTLE_PRESETS.length - 1);
+  const kb = KENBURNS_SUBTLE_PRESETS[kbIdx];
+  const kenBurnsScale = interpolate(easedProgress, [0, 1], [kb.scaleFrom, kb.scaleTo], {
     extrapolateRight: "clamp",
   });
-  const kenBurnsPanX = interpolate(easedProgress, [0, 1], [0, -10], {
+  const kenBurnsPanX = interpolate(easedProgress, [0, 1], [0, kb.panXTo], {
     extrapolateRight: "clamp",
   });
-  const kenBurnsRotate = interpolate(easedProgress, [0, 1], [0, 0.3], {
+  const kenBurnsRotate = interpolate(easedProgress, [0, 1], [0, kb.rotateTo], {
     extrapolateRight: "clamp",
   });
 

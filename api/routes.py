@@ -967,7 +967,7 @@ def _cleanup_job_artifacts(job_id: str) -> None:
     if job_dir.exists():
         shutil.rmtree(str(job_dir), ignore_errors=True)
 
-    remotion_assets = Path(REMOTION_DIR) / "public" / "assets" / job_id
+    remotion_assets = Path(OUTPUT_DIR) / job_id / "assets"
     if remotion_assets.exists():
         shutil.rmtree(str(remotion_assets), ignore_errors=True)
 
@@ -3482,8 +3482,8 @@ async def upload_cta(
     if len(content) > _MAX_CTA_SIZE:
         raise HTTPException(400, "File too large (max 50MB)")
 
-    # Save to remotion/public/assets/{job_id}/cta_{filename}
-    assets_dir = Path(REMOTION_DIR) / "public" / "assets" / job_id
+    # Save to output/{job_id}/assets/cta_{filename}
+    assets_dir = Path(OUTPUT_DIR) / job_id / "assets"
     assets_dir.mkdir(parents=True, exist_ok=True)
 
     ext = Path(file.filename or "media").suffix or ".mp4"
@@ -3491,8 +3491,8 @@ async def upload_cta(
     dest.write_bytes(content)
 
     # Return local path (for Remotion) and signed URL (for frontend)
-    local_path = f"assets/{job_id}/cta{ext}"
-    rel_path = f"assets/{job_id}/cta{ext}"
+    local_path = f"{job_id}/assets/cta{ext}"
+    rel_path = f"{job_id}/assets/cta{ext}"
     media_type = "video" if file.content_type.startswith("video") else "image"
 
     return {
@@ -3528,7 +3528,7 @@ async def upload_logo(
     if len(content) > _MAX_LOGO_SIZE:
         raise HTTPException(400, "Logo too large (max 2MB)")
 
-    assets_dir = Path(REMOTION_DIR) / "public" / "assets" / job_id
+    assets_dir = Path(OUTPUT_DIR) / job_id / "assets"
     assets_dir.mkdir(parents=True, exist_ok=True)
 
     ext = Path(file.filename or "logo.png").suffix or ".png"
@@ -3536,8 +3536,8 @@ async def upload_logo(
     dest.write_bytes(content)
 
     return {
-        "logo_url": f"assets/{job_id}/logo{ext}",
-        "preview_url": _get_signed_file_url(f"assets/{job_id}/logo{ext}"),
+        "logo_url": f"{job_id}/assets/logo{ext}",
+        "preview_url": _get_signed_file_url(f"{job_id}/assets/logo{ext}"),
     }
 
 
@@ -3570,7 +3570,7 @@ async def upload_custom_background(
     if len(content) > _MAX_BG_SIZE:
         raise HTTPException(400, "File too large (max 50MB)")
 
-    assets_dir = Path(REMOTION_DIR) / "public" / "assets" / job_id
+    assets_dir = Path(OUTPUT_DIR) / job_id / "assets"
     assets_dir.mkdir(parents=True, exist_ok=True)
 
     ext = Path(file.filename or "bg").suffix or (".mp4" if file.content_type.startswith("video") else ".jpg")
@@ -3580,9 +3580,9 @@ async def upload_custom_background(
     media_type = "video" if file.content_type.startswith("video") else "image"
 
     return {
-        "bg_url": f"assets/{job_id}/custom_bg{ext}",
+        "bg_url": f"{job_id}/assets/custom_bg{ext}",
         "bg_type": media_type,
-        "preview_url": _get_signed_file_url(f"assets/{job_id}/custom_bg{ext}"),
+        "preview_url": _get_signed_file_url(f"{job_id}/assets/custom_bg{ext}"),
     }
 
 
