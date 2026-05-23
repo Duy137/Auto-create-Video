@@ -244,6 +244,9 @@ class VideoProps(BaseModel):
     width: int = 1080
     height: int = 1920
     settings: VideoSettings = VideoSettings()
+    brand_logo_file: str | None = None
+    brand_overlay_bg_file: str | None = None
+
 
 
 # ══════════════════════════════════════════════

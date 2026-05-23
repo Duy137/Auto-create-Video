@@ -48,6 +48,23 @@ class RenderStage(BaseStage):
             video_settings.background_preset = state.background_preset
         width, height = resolve_output_dimensions(video_settings.aspect_ratio)
         render_word_timestamps = state.display_word_timestamps or state.word_timestamps or []
+
+        # Resolve cryptovn101-logo and cryptovn101-overlay-bg extensions dynamically
+        project_root = Path(__file__).resolve().parent.parent.parent.parent
+        public_dir = project_root / "remotion" / "public"
+
+        logo_file = "cryptovn101-logo.png"  # fallback
+        for ext in [".png", ".jpg", ".jpeg", ".PNG", ".JPG", ".JPEG"]:
+            if (public_dir / f"cryptovn101-logo{ext}").exists():
+                logo_file = f"cryptovn101-logo{ext}"
+                break
+
+        overlay_bg_file = "cryptovn101-overlay-bg.jpeg"  # fallback
+        for ext in [".jpeg", ".jpg", ".png", ".JPEG", ".JPG", ".PNG"]:
+            if (public_dir / f"cryptovn101-overlay-bg{ext}").exists():
+                overlay_bg_file = f"cryptovn101-overlay-bg{ext}"
+                break
+
         video_props = VideoProps(
             job_id=state.job_id,
             title=parsed_title,
@@ -58,6 +75,8 @@ class RenderStage(BaseStage):
             width=width,
             height=height,
             settings=video_settings,
+            brand_logo_file=logo_file,
+            brand_overlay_bg_file=overlay_bg_file,
         )
 
         # Persist video_props.json

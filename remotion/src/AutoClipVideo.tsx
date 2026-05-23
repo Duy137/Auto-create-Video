@@ -78,7 +78,18 @@ const SceneRenderer: React.FC<{
   brandLogoUrl?: string | null;
   brandName?: string | null;
   jobId?: string;
-}> = ({ scene, colorPalette, wordTimestamps, brandLogoUrl, brandName, jobId }) => {
+  brandLogoFile?: string | null;
+  brandOverlayBgFile?: string | null;
+}> = ({
+  scene,
+  colorPalette,
+  wordTimestamps,
+  brandLogoUrl,
+  brandName,
+  jobId,
+  brandLogoFile,
+  brandOverlayBgFile,
+}) => {
   switch (scene.sceneType) {
     case "title_card":
       return <TitleCard scene={scene} colorPalette={colorPalette} brandLogoUrl={brandLogoUrl} brandName={brandName} />;
@@ -99,7 +110,15 @@ const SceneRenderer: React.FC<{
     case "timeline":
       return <Timeline scene={scene} colorPalette={colorPalette} wordTimestamps={wordTimestamps} />;
     case "cryptovn101_news": // [CryptoVN Custom]
-      return <CryptoVN101News scene={scene} colorPalette={colorPalette} jobId={jobId} />;
+      return (
+        <CryptoVN101News
+          scene={scene}
+          colorPalette={colorPalette}
+          jobId={jobId}
+          brandLogoFile={brandLogoFile}
+          brandOverlayBgFile={brandOverlayBgFile}
+        />
+      );
     case "story_beats":
       return <StoryBeats scene={scene} colorPalette={colorPalette} wordTimestamps={wordTimestamps} />;
     default:
@@ -183,6 +202,8 @@ const SceneWithEntryMotion: React.FC<{
   brandName?: string | null;
   seed: number;
   jobId?: string;
+  brandLogoFile?: string | null;
+  brandOverlayBgFile?: string | null;
 }> = ({
   scene,
   colorPalette,
@@ -194,6 +215,8 @@ const SceneWithEntryMotion: React.FC<{
   brandName,
   seed,
   jobId,
+  brandLogoFile,
+  brandOverlayBgFile,
 }) => {
   const frame = useCurrentFrame();
   const sceneKey = scene.sceneIndex * 100;
@@ -273,7 +296,16 @@ const SceneWithEntryMotion: React.FC<{
         opacity: entryOpacity * exitOpacity,
       }}
     >
-      <SceneRenderer scene={scene} colorPalette={colorPalette} wordTimestamps={wordTimestamps} brandLogoUrl={brandLogoUrl} brandName={brandName} jobId={jobId} />
+      <SceneRenderer
+        scene={scene}
+        colorPalette={colorPalette}
+        wordTimestamps={wordTimestamps}
+        brandLogoUrl={brandLogoUrl}
+        brandName={brandName}
+        jobId={jobId}
+        brandLogoFile={brandLogoFile}
+        brandOverlayBgFile={brandOverlayBgFile}
+      />
       {/* Emoji pop-up overlay (per-scene, not on title_card) */}
       {scene.emoji && scene.sceneType !== "title_card" && (
         <EmojiPopup
@@ -369,6 +401,8 @@ export const AutoClipVideo: React.FC<AutoClipVideoProps> = (rawProps) => {
                     brandName={props.brandName}
                     seed={seed}
                     jobId={props.jobId}
+                    brandLogoFile={props.brandLogoFile}
+                    brandOverlayBgFile={props.brandOverlayBgFile}
                   />
                 </TransitionSeries.Sequence>
                 {hasTransition && (

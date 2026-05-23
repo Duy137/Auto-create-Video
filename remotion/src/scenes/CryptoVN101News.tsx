@@ -44,13 +44,13 @@ import { KENBURNS_PRESETS, VIDEO_DRIFT_PRESETS } from "../lib/kenburns";
 // ── Constants ──
 
 const BRAND_COLOR = "#C6FD01";
-/** Whether the decorative overlay background image exists */
-const OVERLAY_BG_FILE = "cryptovn101-overlay-bg.jpeg";
 
 interface CryptoVN101NewsProps {
   scene: SceneData;
   colorPalette: VideoProps["colorPalette"];
   jobId?: string;
+  brandLogoFile?: string | null;
+  brandOverlayBgFile?: string | null;
 }
 
 /** Resolve asset URL: local paths use staticFile(), remote URLs pass through */
@@ -73,6 +73,8 @@ export const CryptoVN101News: React.FC<CryptoVN101NewsProps> = ({
   scene,
   colorPalette,
   jobId,
+  brandLogoFile,
+  brandOverlayBgFile,
 }) => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
@@ -265,7 +267,7 @@ export const CryptoVN101News: React.FC<CryptoVN101NewsProps> = ({
         }}
       >
         <Img
-          src={staticFile(OVERLAY_BG_FILE)}
+          src={staticFile(brandOverlayBgFile || "cryptovn101-overlay-bg.jpeg")}
           style={{
             width: "100%",
             height: "100%",
@@ -319,7 +321,7 @@ export const CryptoVN101News: React.FC<CryptoVN101NewsProps> = ({
           }}
         >
           <Img
-            src={staticFile("cryptovn101-logo.png")}
+            src={staticFile(brandLogoFile || "cryptovn101-logo.png")}
             style={{ width: 130, height: 130 }}
           />
           <span

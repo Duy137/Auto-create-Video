@@ -255,6 +255,8 @@ export const VideoPropsSchema = z.object({
   width: z.number().int().positive().default(1080),
   height: z.number().int().positive().default(1920),
   settings: SettingsSchema,
+  brandLogoFile: z.string().nullable().optional(),
+  brandOverlayBgFile: z.string().nullable().optional(),
 });
 
 export type VideoProps = z.infer<typeof VideoPropsSchema>;
