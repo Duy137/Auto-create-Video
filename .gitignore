@@ -61,3 +61,7 @@ graph_diagram.png
 # Debugging scripts
 debug_scripts/
 test/
+
+
+.agent/
+docs/superpowers/

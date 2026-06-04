@@ -10,6 +10,7 @@ import ScriptAgentView from '@/sections/ScriptAgentView'
 import ReviewView from '@/sections/ReviewView'
 import ResultView from '@/sections/ResultView'
 import ScriptSelectionView from '@/sections/ScriptSelectionView'
+import { LoaderCircle } from 'lucide-react'
 
 type Step = 'setup' | 'script_agent' | 'processing' | 'script_selection' | 'review' | 'result'
 type IndicatorStep = 'setup' | 'processing' | 'review' | 'result'
@@ -44,6 +45,7 @@ export default function CreatePage() {
   const [humanCheckpoint, setHumanCheckpoint] = useState<HumanCheckpoint | null>(null)
   const [showAbandonConfirm, setShowAbandonConfirm] = useState(false)
   const [projectDialogOpen, setProjectDialogOpen] = useState(false)
+  const [isLoading, setIsLoading] = useState(false)
   const [searchParams, setSearchParams] = useSearchParams()
   const hasMounted = useRef(false)
 
@@ -152,31 +154,36 @@ export default function CreatePage() {
       resumeMode?: string | null
     },
   ) => {
-    let resumeJobId = options?.resumeJobId ?? null
-    let resumeMode = options?.resumeMode ?? null
+    setIsLoading(true)
+    try {
+      let resumeJobId = options?.resumeJobId ?? null
+      let resumeMode = options?.resumeMode ?? null
 
-    setVideoUrl(null)
+      setVideoUrl(null)
 
-    const hydrated = await hydrateFromProject(projectIdToLoad)
-    if (!resumeJobId) resumeJobId = hydrated.resumeJobId
-    if (!resumeMode) resumeMode = hydrated.resumeMode
+      const hydrated = await hydrateFromProject(projectIdToLoad)
+      if (!resumeJobId) resumeJobId = hydrated.resumeJobId
+      if (!resumeMode) resumeMode = hydrated.resumeMode
 
-    if (!resumeJobId && resumeMode === 'script_agent') {
-      setJobId(null)
-      setStep('script_agent')
-      return
+      if (!resumeJobId && resumeMode === 'script_agent') {
+        setJobId(null)
+        setStep('script_agent')
+        return
+      }
+
+      if (!resumeJobId) {
+        setJobId(null)
+        setStep('setup')
+        return
+      }
+
+      setJobId(resumeJobId)
+      const job = await api.get(`/jobs/${resumeJobId}`)
+      if (!projectId && job.project_id) setProjectId(job.project_id)
+      applyJobStatus(resumeJobId, job)
+    } finally {
+      setIsLoading(false)
     }
-
-    if (!resumeJobId) {
-      setJobId(null)
-      setStep('setup')
-      return
-    }
-
-    setJobId(resumeJobId)
-    const job = await api.get(`/jobs/${resumeJobId}`)
-    if (!projectId && job.project_id) setProjectId(job.project_id)
-    applyJobStatus(resumeJobId, job)
   }, [applyJobStatus, hydrateFromProject, projectId])
 
   // Bootstrap from URL params. A bare /create starts a new video instead of resuming a draft.
@@ -231,6 +238,36 @@ export default function CreatePage() {
       cancelled = true
     }
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Listen to searchParams changes to support client-side transitions (e.g. cloning / query param changes)
+  useEffect(() => {
+    const urlProjectId = searchParams.get('project')
+    const urlJobId = searchParams.get('job')
+    const urlMode = searchParams.get('mode')
+
+    if (urlProjectId) {
+      const modeMap: Partial<Record<Step, string>> = {
+        setup: 'setup',
+        processing: 'processing',
+        review: 'review',
+        result: 'result',
+        script_selection: 'script_selection',
+        script_agent: 'script_agent',
+      }
+      const currentMode = modeMap[step]
+
+      if (
+        urlProjectId !== projectId ||
+        (urlJobId && urlJobId !== jobId) ||
+        (urlMode && urlMode !== currentMode)
+      ) {
+        void loadProjectIntoFlow(urlProjectId, {
+          resumeJobId: urlJobId,
+          resumeMode: urlMode,
+        })
+      }
+    }
+  }, [searchParams, projectId, jobId, step, loadProjectIntoFlow])
 
   const handleProjectSelected = useCallback(async (project: ProjectData) => {
     setProjectDialogOpen(false)
@@ -591,6 +628,21 @@ export default function CreatePage() {
         onOpenChange={setProjectDialogOpen}
         onProjectSelected={handleProjectSelected}
       />
+
+      {isLoading && (
+        <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-zinc-950/80 backdrop-blur-md transition-all duration-300">
+          <div className="flex flex-col items-center p-8 rounded-2xl bg-zinc-900/90 border border-zinc-800 shadow-2xl max-w-sm w-full mx-4 text-center animate-in fade-in zoom-in duration-200">
+            <div className="relative flex items-center justify-center w-16 h-16 mb-6">
+              <div className="absolute inset-0 rounded-full bg-violet-500/20 animate-ping duration-1000" />
+              <LoaderCircle className="w-10 h-10 text-violet-500 animate-spin" />
+            </div>
+            <h3 className="text-lg font-semibold text-zinc-100 mb-2">Đang tải dự án</h3>
+            <p className="text-sm text-zinc-400">
+              Vui lòng chờ trong giây lát khi hệ thống thiết lập dữ liệu...
+            </p>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

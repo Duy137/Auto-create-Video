@@ -320,13 +320,29 @@ def _sign_props_urls(props: dict | None) -> dict | None:
     import copy
     props = copy.deepcopy(props)
     
+    def _to_rel(val_str: str) -> str:
+        try:
+            path = Path(val_str)
+            if path.is_absolute():
+                out_dir = Path(OUTPUT_DIR).resolve()
+                res_path = path.resolve()
+                if res_path.is_relative_to(out_dir):
+                    return str(res_path.relative_to(out_dir)).replace("\\", "/")
+                
+                remotion_pub = (Path(REMOTION_DIR) / "public").resolve()
+                if res_path.is_relative_to(remotion_pub):
+                    return str(res_path.relative_to(remotion_pub)).replace("\\", "/")
+        except Exception:
+            pass
+        return val_str
+
     scenes = props.get("scenes", [])
     for scene in scenes:
         for key in ["media_url", "poster_url", "_preview_url", "logo_url", "bg_url"]:
             val = scene.get(key)
             if isinstance(val, str) and val and not val.startswith(("http", "/api/")):
-                # It's a local relative path (e.g. assets/jobid/file.png)
-                scene[key] = _get_signed_file_url(val)
+                val_rel = _to_rel(val)
+                scene[key] = _get_signed_file_url(val_rel)
     
     # Also handle top-level settings (bgm_url, custom_background_url, watermark_logo_url, etc)
     settings = props.get("settings", {})
@@ -334,7 +350,8 @@ def _sign_props_urls(props: dict | None) -> dict | None:
         for key in ["bgm_url", "custom_background_url", "watermark_logo_url", "custom_font_url"]:
             val = settings.get(key)
             if isinstance(val, str) and val and not val.startswith(("http", "/api/")):
-                settings[key] = _get_signed_file_url(val)
+                val_rel = _to_rel(val)
+                settings[key] = _get_signed_file_url(val_rel)
 
     return props
 
@@ -2952,6 +2969,74 @@ async def _resume_agentic_pipeline_background(
 # ══════════════════════════════════════
 # REVIEW — render / props / re-search
 # ══════════════════════════════════════
+
+@router.post(
+    "/jobs/{job_id}/clone",
+    response_model=JobResponse,
+    status_code=status.HTTP_201_CREATED,
+    summary="Clone a completed or failed job configuration to a new job in review status",
+)
+async def clone_job(
+    job_id: str,
+    user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+):
+    import copy
+    try:
+        source_job = await _get_job_for(db, job_id, user)
+
+        # 1. Create new job ID and object
+        new_job_id = uuid.uuid4().hex[:12]
+        new_job = Job(
+            id=new_job_id,
+            user_id=user.id,
+            status="review",
+            input_text=source_job.input_text,
+            settings=copy.deepcopy(source_job.settings) if source_job.settings else None,
+            project_id=source_job.project_id,
+            props=copy.deepcopy(source_job.props) if source_job.props else None,
+            pipeline_logs={
+                "cloned_from": job_id,
+                "cloned_at": datetime.now(timezone.utc).isoformat(),
+            },
+            created_at=datetime.now(timezone.utc),
+        )
+        db.add(new_job)
+
+        # 2. Sync project if it exists
+        if source_job.project_id:
+            await _sync_project_for_job(
+                db,
+                new_job,
+                stage="review",
+                last_known_props=new_job.props,
+                active_job_id=new_job_id,
+            )
+
+        # 3. Track usage
+        db.add(UsageRecord(
+            user_id=user.id,
+            action="clone_job",
+            created_at=datetime.now(timezone.utc),
+        ))
+
+        await db.flush()
+        await db.commit()
+
+        # Update response to sign props URLs
+        response_job = _public_job_response(new_job)
+        response_job.props = _sign_props_urls(response_job.props)
+        return response_job
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception("Failed to clone job")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to clone job: {str(e)}",
+        )
+
 
 @router.post("/jobs/{job_id}/render", response_model=JobResponse)
 async def trigger_render(

@@ -1,13 +1,13 @@
 import { useRef, useState, useEffect } from 'react'
-import { Download, RefreshCw, CircleCheck, Clapperboard, Share2, Info, LoaderCircle, CircleAlert, Copy, Link2 } from 'lucide-react'
+import { Download, RefreshCw, CircleCheck, Clapperboard, Share2, LoaderCircle, CircleAlert, Copy, Link2, Sparkles } from 'lucide-react'
 import { QRCodeSVG } from 'qrcode.react'
+import { useNavigate } from 'react-router-dom'
 
-import { createShareLink, deleteShareLink, type ShareLinkData, tryRefresh } from '@/api/client'
+import { api, createShareLink, deleteShareLink, type ShareLinkData, tryRefresh } from '@/api/client'
 import { showErrorToast } from '@/components/SystemErrorReport'
 import { Card, CardContent, CardTitle, CardFooter } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { Separator } from "@/components/ui/separator"
 import { Input } from "@/components/ui/input"
 import {
   Dialog,
@@ -31,6 +31,31 @@ interface ResultViewProps {
  * Result View — video player, download button, generation stats.
  */
 export default function ResultView({ jobId, videoUrl, videoProps, onCreateAnother }: ResultViewProps) {
+  const navigate = useNavigate()
+  const [isCloning, setIsCloning] = useState(false)
+
+  const handleCloneJob = async () => {
+    setIsCloning(true)
+    try {
+      const data = await api.post<{ id: string; project_id?: string | null }>(`/jobs/${jobId}/clone`, {})
+      toast.success("Đã tạo bản nháp chỉnh sửa mới")
+      if (data.project_id) {
+        navigate(`/create?project=${encodeURIComponent(data.project_id)}&job=${data.id}&mode=review`)
+      } else {
+        navigate(`/review/${data.id}`)
+      }
+    } catch (e: any) {
+      showErrorToast(e, {
+        source: "result_clone",
+        jobId,
+        fallback: "Không thể bắt đầu chỉnh sửa tiếp",
+        prefix: "Không thể bắt đầu chỉnh sửa tiếp",
+      })
+    } finally {
+      setIsCloning(false)
+    }
+  }
+
   const downloadUrl = videoUrl || `/api/jobs/${jobId}/download`
   const thumbnailUrl = `/api/jobs/${jobId}/thumbnail`
   const videoRef = useRef<HTMLVideoElement>(null)
@@ -64,7 +89,7 @@ export default function ResultView({ jobId, videoUrl, videoProps, onCreateAnothe
           }
         }
         if (!r.ok) throw new Error(`HTTP ${r.status}`)
-        
+
         const blob = await r.blob()
         objectUrl = URL.createObjectURL(blob)
         if (videoRef.current) {
@@ -179,12 +204,12 @@ export default function ResultView({ jobId, videoUrl, videoProps, onCreateAnothe
       {/* Success Header */}
       <div className="text-center space-y-4">
         <div className="flex justify-center">
-            <div className="bg-green-500/10 p-5 rounded-full ring-8 ring-green-500/5">
-                <CircleCheck className="w-16 h-12 text-green-500" />
-            </div>
+          <div className="bg-green-500/10 p-5 rounded-full ring-8 ring-green-500/5">
+            <CircleCheck className="w-16 h-12 text-green-500" />
+          </div>
         </div>
         <div className="space-y-1">
-            <h2 className="text-3xl font-extrabold tracking-tight" style={{ fontFamily: 'var(--font-display)' }}>Tuyệt vời! Video đã sẵn sàng</h2>
+          <h2 className="text-3xl font-extrabold tracking-tight" style={{ fontFamily: 'var(--font-display)' }}>Tuyệt vời! Video đã sẵn sàng</h2>
           <p className="text-muted-foreground">AI đã hoàn tất quá trình biên tập và kết xuất video của bạn.</p>
         </div>
       </div>
@@ -216,83 +241,83 @@ export default function ResultView({ jobId, videoUrl, videoProps, onCreateAnothe
           </div>
         </CardContent>
         <CardFooter className="flex flex-col items-start p-6 space-y-4" style={{ background: 'color-mix(in srgb, var(--surface-2) 60%, transparent)' }}>
-            <div className="w-full flex justify-between items-center">
-                <div className="space-y-1">
-                    <CardTitle className="text-lg font-bold flex items-center gap-2">
-                        <Clapperboard className="w-4 h-4 text-primary" /> {title}
-                    </CardTitle>
-                    <div className="flex gap-2 items-center">
-                        <Badge variant="outline" className="font-mono text-[10px]">{durationSec}s</Badge>
-                        <Badge variant="outline" className="font-mono text-[10px]">{sceneCount} Cảnh quay</Badge>
-                      <Badge variant="secondary" className="text-[10px] border-none uppercase" style={{ background: 'color-mix(in srgb, var(--brand-500) 14%, transparent)', color: 'var(--brand-700)' }}>Toàn HD</Badge>
-                    </div>
-                </div>
-                <Dialog open={shareOpen} onOpenChange={setShareOpen}>
-                  <DialogTrigger
-                    render={
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="rounded-full h-10 w-10 hover:bg-primary/10 hover:text-primary transition-colors"
-                      />
-                    }
-                  >
-                    <Share2 className="w-5 h-5" />
-                  </DialogTrigger>
-                  <DialogContent>
-                    <DialogHeader>
-                      <DialogTitle className="flex items-center gap-2">
-                        <Link2 className="w-4 h-4" /> Chia sẻ công khai
-                      </DialogTitle>
-                      <DialogDescription>
-                        Tạo liên kết công khai để người khác xem video mà không cần đăng nhập.
-                      </DialogDescription>
-                    </DialogHeader>
-
-                    {shareLoading && !shareData ? (
-                      <div className="py-8 flex items-center justify-center text-sm text-muted-foreground gap-2">
-                        <LoaderCircle className="w-4 h-4 animate-spin" /> Đang tạo liên kết chia sẻ...
-                      </div>
-                    ) : shareData ? (
-                      <div className="space-y-4">
-                        <div className="flex justify-center">
-                          <div className="rounded-lg border p-3 bg-white">
-                            <QRCodeSVG value={sharePublicUrl} size={168} />
-                          </div>
-                        </div>
-
-                        <div className="space-y-2">
-                          <Input value={sharePublicUrl} readOnly />
-                          <div className="flex gap-2">
-                            <Button className="flex-1" onClick={handleCopyShareUrl}>
-                              <Copy className="w-4 h-4 mr-2" /> Sao chép liên kết
-                            </Button>
-                            <Button
-                              variant="outline"
-                              className="flex-1"
-                              onClick={() => window.open(sharePublicUrl, '_blank')}
-                            >
-                              Mở trang chia sẻ
-                            </Button>
-                          </div>
-                        </div>
-
-                        <DialogFooter>
-                          <Button
-                            variant="destructive"
-                            onClick={handleDisableShare}
-                            disabled={shareBusy}
-                          >
-                            {shareBusy ? 'Đang xử lý...' : 'Tắt chia sẻ'}
-                          </Button>
-                        </DialogFooter>
-                      </div>
-                    ) : (
-                      <p className="text-sm text-muted-foreground">Không thể tạo liên kết chia sẻ.</p>
-                    )}
-                  </DialogContent>
-                </Dialog>
+          <div className="w-full flex justify-between items-center">
+            <div className="space-y-1">
+              <CardTitle className="text-lg font-bold flex items-center gap-2">
+                <Clapperboard className="w-4 h-4 text-primary" /> {title}
+              </CardTitle>
+              <div className="flex gap-2 items-center">
+                <Badge variant="outline" className="font-mono text-[10px]">{durationSec}s</Badge>
+                <Badge variant="outline" className="font-mono text-[10px]">{sceneCount} Cảnh quay</Badge>
+                <Badge variant="secondary" className="text-[10px] border-none uppercase" style={{ background: 'color-mix(in srgb, var(--brand-500) 14%, transparent)', color: 'var(--brand-700)' }}>Toàn HD</Badge>
+              </div>
             </div>
+            <Dialog open={shareOpen} onOpenChange={setShareOpen}>
+              <DialogTrigger
+                render={
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="rounded-full h-10 w-10 hover:bg-primary/10 hover:text-primary transition-colors"
+                  />
+                }
+              >
+                <Share2 className="w-5 h-5" />
+              </DialogTrigger>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle className="flex items-center gap-2">
+                    <Link2 className="w-4 h-4" /> Chia sẻ công khai
+                  </DialogTitle>
+                  <DialogDescription>
+                    Tạo liên kết công khai để người khác xem video mà không cần đăng nhập.
+                  </DialogDescription>
+                </DialogHeader>
+
+                {shareLoading && !shareData ? (
+                  <div className="py-8 flex items-center justify-center text-sm text-muted-foreground gap-2">
+                    <LoaderCircle className="w-4 h-4 animate-spin" /> Đang tạo liên kết chia sẻ...
+                  </div>
+                ) : shareData ? (
+                  <div className="space-y-4">
+                    <div className="flex justify-center">
+                      <div className="rounded-lg border p-3 bg-white">
+                        <QRCodeSVG value={sharePublicUrl} size={168} />
+                      </div>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Input value={sharePublicUrl} readOnly />
+                      <div className="flex gap-2">
+                        <Button className="flex-1" onClick={handleCopyShareUrl}>
+                          <Copy className="w-4 h-4 mr-2" /> Sao chép liên kết
+                        </Button>
+                        <Button
+                          variant="outline"
+                          className="flex-1"
+                          onClick={() => window.open(sharePublicUrl, '_blank')}
+                        >
+                          Mở trang chia sẻ
+                        </Button>
+                      </div>
+                    </div>
+
+                    <DialogFooter>
+                      <Button
+                        variant="destructive"
+                        onClick={handleDisableShare}
+                        disabled={shareBusy}
+                      >
+                        {shareBusy ? 'Đang xử lý...' : 'Tắt chia sẻ'}
+                      </Button>
+                    </DialogFooter>
+                  </div>
+                ) : (
+                  <p className="text-sm text-muted-foreground">Không thể tạo liên kết chia sẻ.</p>
+                )}
+              </DialogContent>
+            </Dialog>
+          </div>
         </CardFooter>
       </Card>
 
@@ -312,20 +337,35 @@ export default function ResultView({ jobId, videoUrl, videoProps, onCreateAnothe
       )}
 
       {/* Action Buttons */}
-      <div className="grid md:grid-cols-2 gap-4 pt-4">
+      <div className="grid md:grid-cols-3 gap-4 pt-4">
         <Button
-            size="lg"
-            className="h-14 font-bold text-lg gap-2 shadow-lg transition-all hover:scale-[1.02]"
-            style={{ background: 'var(--gradient-brand)', color: '#fff' }}
-            onClick={handleDownload}
+          size="lg"
+          className="h-14 font-bold text-lg gap-2 shadow-lg transition-all hover:scale-[1.02]"
+          style={{ background: 'var(--gradient-brand)', color: '#fff' }}
+          onClick={handleDownload}
         >
           <Download className="w-5 h-5" /> Tải xuống Video (.mp4)
         </Button>
         <Button
-            variant="outline"
-            size="lg"
-            className="h-14 font-bold text-lg gap-2 border-primary/20 hover:bg-primary/5 transition-all hover:scale-[1.02]"
-            onClick={onCreateAnother}
+          variant="outline"
+          size="lg"
+          className="h-14 font-bold text-lg gap-2 border-primary/20 hover:bg-primary/5 transition-all hover:scale-[1.02] disabled:opacity-50"
+          onClick={handleCloneJob}
+          disabled={isCloning}
+        >
+          {isCloning ? (
+            <LoaderCircle className="w-5 h-5 animate-spin" />
+          ) : (
+            <Sparkles className="w-5 h-5 text-primary" />
+          )}
+          Chỉnh sửa tiếp
+        </Button>
+        <Button
+          variant="ghost"
+          size="lg"
+          className="h-14 font-bold text-lg gap-2 border transition-all hover:scale-[1.02]"
+          style={{ borderColor: "var(--border-default)", background: "var(--surface-0)" }}
+          onClick={onCreateAnother}
         >
           <RefreshCw className="w-5 h-5" /> Tạo Video mới
         </Button>

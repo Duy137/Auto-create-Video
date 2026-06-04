@@ -49,6 +49,7 @@ export default function ResultPage() {
   const [renderMessage, setRenderMessage] = useState<string>("")
   const [shareToken, setShareToken] = useState<string | null>(null)
   const [shareViews, setShareViews] = useState<number>(0)
+  const [isCloning, setIsCloning] = useState(false)
 
   const refreshJobStatus = useCallback(async () => {
     if (!jobId) return
@@ -173,6 +174,29 @@ export default function ResultPage() {
     }
   }
 
+  const handleCloneJob = async () => {
+    if (!jobId) return
+    setIsCloning(true)
+    try {
+      const data = await api.post<{ id: string; project_id?: string | null }>(`/jobs/${jobId}/clone`, {})
+      toast.success("Đã tạo bản nháp chỉnh sửa mới")
+      if (data.project_id) {
+        navigate(`/create?project=${encodeURIComponent(data.project_id)}&job=${data.id}&mode=review`)
+      } else {
+        navigate(`/review/${data.id}`)
+      }
+    } catch (e: any) {
+      showErrorToast(e, {
+        source: "result_clone",
+        jobId,
+        fallback: "Không thể bắt đầu chỉnh sửa tiếp",
+        prefix: "Không thể bắt đầu chỉnh sửa tiếp",
+      })
+    } finally {
+      setIsCloning(false)
+    }
+  }
+
   const downloadVideo = async () => {
     if (!jobId) return
     try {
@@ -261,9 +285,11 @@ export default function ResultPage() {
       <Header
         title={String(job.props?.title || "Kết quả")}
         status={job.status}
+        isCloning={isCloning}
         onBack={() => navigate("/dashboard")}
         onRender={triggerRender}
         onDownload={downloadVideo}
+        onClone={handleCloneJob}
       />
       <div className="grid lg:grid-cols-[420px_1fr] gap-6">
         <Player
@@ -298,15 +324,19 @@ export default function ResultPage() {
 function Header({
   title,
   status,
+  isCloning,
   onBack,
   onRender,
   onDownload,
+  onClone,
 }: {
   title: string
   status: string
+  isCloning: boolean
   onBack: () => void
   onRender: () => void
   onDownload: () => void
+  onClone: () => void
 }) {
   return (
     <div className="flex flex-wrap items-center gap-3">
@@ -323,10 +353,22 @@ function Header({
           {title}
         </h1>
       </div>
-      <button onClick={onRender} disabled={status !== "review"} className="text-sm font-medium px-4 py-2 rounded-[var(--radius-md)] border inline-flex items-center gap-2 disabled:opacity-50"
-        style={{ borderColor: "var(--border-default)", background: "var(--surface-0)" }}>
-        <RefreshCw size={14} /> Render lại
-      </button>
+      {status === "review" ? (
+        <button onClick={onRender} className="text-sm font-medium px-4 py-2 rounded-[var(--radius-md)] border inline-flex items-center gap-2"
+          style={{ borderColor: "var(--border-default)", background: "var(--surface-0)" }}>
+          <RefreshCw size={14} /> Render lại
+        </button>
+      ) : (
+        <button onClick={onClone} disabled={isCloning} className="text-sm font-medium px-4 py-2 rounded-[var(--radius-md)] border inline-flex items-center gap-2 disabled:opacity-50"
+          style={{ borderColor: "var(--border-default)", background: "var(--surface-0)" }}>
+          {isCloning ? (
+            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+          ) : (
+            <Sparkles size={14} />
+          )}
+          Chỉnh sửa tiếp
+        </button>
+      )}
       <button onClick={onDownload} disabled={status !== "done"} className="btn-brand disabled:opacity-50">
         <Download size={16} /> Tải MP4
       </button>

@@ -6,7 +6,7 @@
  */
 
 import React from "react";
-import { AbsoluteFill, Img, Video, useCurrentFrame, staticFile } from "remotion";
+import { AbsoluteFill, Img, Video, useCurrentFrame, staticFile, getRemotionEnvironment } from "remotion";
 import { FloatingParticles } from "./FloatingParticles";
 
 // ── 12 curated gradient presets by topic ──
@@ -39,12 +39,16 @@ export const GRADIENT_PRESETS: Record<string, string> = {
 
 // Helper to resolve asset URLs (same pattern as AutoClipVideo)
 const resolveCustomBgUrl = (url: string): string => {
-  if (url.startsWith("http://") || url.startsWith("https://") || url.startsWith("/api/")) return url;
-  try {
-    return staticFile(url);
-  } catch {
+  if (!url) return "";
+  if (url.startsWith("http") || url.startsWith("data:")) return url;
+  if (url.startsWith("/api/")) {
+    const { isRendering } = getRemotionEnvironment();
+    if (isRendering) {
+      return `http://127.0.0.1:8000${url}`;
+    }
     return url;
   }
+  return staticFile(url);
 };
 
 interface AnimatedBackgroundProps {

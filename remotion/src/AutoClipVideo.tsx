@@ -472,15 +472,49 @@ export const AutoClipVideo: React.FC<AutoClipVideoProps> = (rawProps) => {
 
       {/* Layer 2.5: SFX variety pool — maps by transition type + seed */}
       {settings.sfx?.enabled && (() => {
+        const WHOOSH_SFX = [
+          "sfx/whoosh.mp3",
+          "sfx/fast-swish.mp3",
+          "sfx/fast-whoosh.mp3",
+          "sfx/mixkit-arrow-whoosh-1491.wav",
+          "sfx/single-swish-01.mp3",
+          "sfx/swish-swoosh-cutscene-sound-effect.mp3",
+          "sfx/swish.mp3",
+          "sfx/transition-whoosh.mp3",
+          "sfx/whoosh-sfx (1).mp3",
+          "sfx/whoosh-sfx.mp3",
+          "sfx/whoosh-wind.mp3",
+        ] as const;
+
+        const CLICK_POP_SFX = [
+          "sfx/pop.mp3",
+          "sfx/pop_7e9Is8L.mp3",
+          "sfx/ding.mp3",
+          "sfx/ding-sound-effect_1_0gpHFnw.mp3",
+          "sfx/finger-snap.mp3",
+          "sfx/meme-click.mp3",
+          "sfx/mouse-click-00-c-fesliyanstudios.mp3",
+          "sfx/mouse-click_gt1reD8.mp3",
+          "sfx/mouse-clicking-1.mp3",
+          "sfx/photo-click.mp3",
+          "sfx/quick-ting.mp3",
+        ] as const;
+
+        const ZOOM_SFX = [
+          "sfx/mixkit-air-zoom-vacuum-2608.wav",
+          ...WHOOSH_SFX,
+          ...CLICK_POP_SFX,
+        ] as const;
+
         const SFX_MAP: Record<string, readonly string[]> = {
-          fade: ["sfx/whoosh.mp3"],
-          slide: ["sfx/whoosh.mp3", "sfx/pop.mp3"],
-          wipe: ["sfx/whoosh.mp3"],
-          zoom: ["sfx/whoosh.mp3", "sfx/ding.mp3"],
-          flip: ["sfx/pop.mp3"],
-          iris: ["sfx/pop.mp3", "sfx/ding.mp3"],
-          "clock-wipe": ["sfx/ding.mp3"],
-          none: ["sfx/whoosh.mp3"],
+          fade: WHOOSH_SFX,
+          slide: [...WHOOSH_SFX, ...CLICK_POP_SFX],
+          wipe: WHOOSH_SFX,
+          zoom: ZOOM_SFX,
+          flip: [...CLICK_POP_SFX, ...WHOOSH_SFX],
+          iris: CLICK_POP_SFX,
+          "clock-wipe": CLICK_POP_SFX,
+          none: WHOOSH_SFX,
         };
         return scenes.map((scene, i) => {
           if (i === 0) return null;
