@@ -52,11 +52,12 @@ async def run_agentic_pipeline(
     initial_state: AgentState,
     progress_callback: Callable[[str, str, float], None] | None = None,
 ) -> AgentState:
-    """Backward-compatible entry point for full deterministic generation."""
+    """Điểm khởi chạy (entry point) tương thích ngược để chạy toàn bộ chu trình pipeline."""
     return await run_agentic_chain(initial_state, render=True)
 
 
 def _has_critical_story_beats_signals(state: AgentState) -> bool:
+    """Kiểm tra xem VLM audit có báo lỗi nghiêm trọng (không tìm thấy media hoặc sai tỉ lệ khung hình) hay không."""
     trigger = {"no_selection", "aspect_mismatch"}
     for decision in state.rerank_decisions.values():
         if not isinstance(decision, dict):
@@ -70,6 +71,7 @@ def _has_critical_story_beats_signals(state: AgentState) -> bool:
 
 
 def _build_video_props_from_state(state: AgentState) -> dict:
+    """Đóng gói toàn bộ dữ liệu từ State thành file video_props (chuẩn JSON) để đưa cho Remotion render."""
     if not state.scenes:
         raise ValueError("Cannot build video props without scenes")
     if not state.audio_path:
@@ -103,6 +105,7 @@ def _build_video_props_from_state(state: AgentState) -> dict:
 
 
 def _persist_video_props(job_id: str, video_props: dict) -> Path:
+    """Lưu dữ liệu video_props thành file JSON vật lý vào thư mục output của job."""
     job_dir = Path(OUTPUT_DIR) / job_id
     job_dir.mkdir(parents=True, exist_ok=True)
     props_path = job_dir / "video_props.json"
@@ -114,15 +117,16 @@ def _persist_video_props(job_id: str, video_props: dict) -> Path:
 
 
 def _check_stage_failure(state: AgentState, stage_name: str) -> None:
+    """Kiểm tra xem stage vừa chạy có bị lỗi hay không, nếu có thì dừng toàn bộ pipeline."""
     if state.failures and state.failures[-1].worker_name == stage_name:
         raise PipelineStageError(stage_name, state.failures[-1].error)
 
 
 async def run_agentic_chain(state: AgentState, *, render: bool = False) -> AgentState:
-    """Run the deterministic stage chain.
+    """Chạy toàn bộ chu trình pipeline theo thứ tự các bước định sẵn.
 
-    The chain is gated by state fields so resume can continue without repeating
-    expensive completed work such as TTS or media search.
+    Chu trình này có khả năng tự động bỏ qua (skip) những bước đã hoàn thành trước đó (dựa vào data trong state).
+    Nhờ vậy, nếu chạy lại (resume), ta sẽ không bị mất tiền API cho các bước đắt đỏ (như TTS hoặc Media) đã làm xong.
     """
     if render and state.final_mp4_path:
         return state.model_copy(update={"is_done": True})
@@ -201,7 +205,7 @@ async def run_agentic_pipeline_from_text(
     settings: AgentJobSettings | None = None,
     skip_render: bool = False,
 ) -> AgentState:
-    """Convenience wrapper for non-API entry points (CLI, demo)."""
+    """Hàm tiện ích để chạy nhanh pipeline từ Text mà không cần thông qua API (dùng cho CLI, demo)."""
     initial_state = AgentState(
         job_id=job_id or uuid.uuid4().hex[:12],
         user_id=user_id,

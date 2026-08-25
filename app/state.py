@@ -19,6 +19,7 @@ from pydantic import BaseModel, Field
 
 
 class WordTimestamp(BaseModel):
+    """Đại diện cho mốc thời gian bắt đầu và kết thúc của một từ trong luồng âm thanh."""
     text: str
     start_ms: float
     end_ms: float
@@ -28,6 +29,7 @@ class WordTimestamp(BaseModel):
 
 
 class ColorPalette(BaseModel):
+    """Bảng màu chủ đạo cho video, thường do LLM tự động phối màu."""
     primary: str  # hex color e.g. "#FF6B35"
     secondary: str
     background: str
@@ -38,24 +40,28 @@ class ColorPalette(BaseModel):
 
 
 class CardItem(BaseModel):
+    """Dữ liệu cho một mục trong danh sách (dùng cho scene type: info_card)."""
     icon: str
     title: str
     subtitle: str
 
 
 class StatItem(BaseModel):
+    """Dữ liệu thống kê (dùng cho scene type: stats_highlight)."""
     label: str
     value: str
     color: str  # hex color
 
 
 class ChartDataPoint(BaseModel):
+    """Một điểm dữ liệu trên biểu đồ (dùng cho scene type: diagram)."""
     x: float | str
     y: float
     label: str | None = None
 
 
 class DiagramSpec(BaseModel):
+    """Cấu hình chi tiết cho biểu đồ hoặc công thức toán học (dùng cho scene type: diagram)."""
     type: str  # line_chart | bar_chart | scatter | math_formula
     x_range: list[float] | None = None
     function: str | None = None
@@ -68,12 +74,14 @@ class DiagramSpec(BaseModel):
 
 
 class ComparisonSide(BaseModel):
+    """Dữ liệu một bên của bảng so sánh (dùng cho scene type: comparison)."""
     label: str                    # max 20 chars
     points: list[str]             # max 5 items, each max 30 chars
     sentiment: str = "neutral"    # "positive" | "negative" | "neutral"
 
 
 class TimelineEvent(BaseModel):
+    """Một sự kiện trên dòng thời gian (dùng cho scene type: timeline)."""
     label: str                      # max 10 chars (e.g. "2024")
     title: str                      # max 20 chars
     description: str | None = None  # max 40 chars
@@ -106,6 +114,7 @@ class SceneAudit(BaseModel):
 
 
 class Scene(BaseModel):
+    """Đại diện cho một phân cảnh trong video, chứa toàn bộ thông tin nội dung, timing và url media."""
     scene_index: int
     scene_type: str  # title_card | stock_background | info_card | stats_highlight | diagram | emoji_grid | comparison | media_showcase | timeline | story_beats | cryptovn101_news
     narration: str
@@ -173,6 +182,7 @@ class Scene(BaseModel):
 
 
 class SubtitleSettings(BaseModel):
+    """Cấu hình hiển thị phụ đề karaoke trong video."""
     enabled: bool = True
     font: str = "NotoSansVN-Bold"
     font_size: int = 48
@@ -188,11 +198,13 @@ class SubtitleSettings(BaseModel):
 
 
 class SfxSettings(BaseModel):
+    """Cấu hình hiệu ứng âm thanh (Sound Effects)."""
     enabled: bool = True
     volume: float = 0.25
 
 
 class CtaSettings(BaseModel):
+    """Cấu hình phần Kêu gọi hành động (Call To Action) ở cuối video."""
     enabled: bool = False
     media_url: str | None = None
     media_type: str = "video"  # "video" | "image"
@@ -200,6 +212,7 @@ class CtaSettings(BaseModel):
 
 
 class VideoSettings(BaseModel):
+    """Cấu hình tổng quan về video (kích thước, hiệu ứng, nhạc nền, watermark...)."""
     aspect_ratio: str = "9:16"
     fps: int = 30
     transition_mode: str = "crossfade"  # none | crossfade | fade_to_black
@@ -292,6 +305,7 @@ class TokenUsage(BaseModel):
 # ── Sub-types ─────────────────────────────────────────────────────────────────
 
 class AgentTurn(BaseModel):
+    """Lịch sử xử lý của một node/agent trong pipeline."""
     timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     agent_name: str
     thought: str | None = None
@@ -303,6 +317,7 @@ class AgentTurn(BaseModel):
 
 
 class WorkerFailure(BaseModel):
+    """Ghi nhận lỗi khi một công đoạn trong pipeline chạy thất bại."""
     worker_name: str
     error: str
     timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
@@ -312,6 +327,7 @@ class WorkerFailure(BaseModel):
 # ── Script generation schemas ──────────────────────────────────────────────────
 
 class ScriptAgentRequest(BaseModel):
+    """Yêu cầu tạo kịch bản từ chủ đề do người dùng nhập vào (Topic mode)."""
     topic: str
     audience: str = "general"
     tone: Literal["formal", "casual", "hype", "educational", "news"] = "casual"
@@ -325,12 +341,14 @@ class ScriptAgentRequest(BaseModel):
 
 
 class ResearchNote(BaseModel):
+    """Ghi chú tài liệu do sub-agent Researcher cào từ web hoặc YouTube."""
     source: str
     summary: str
     url: str | None = None
 
 
 class ScriptVariant(BaseModel):
+    """Một phiên bản kịch bản video hoàn chỉnh do LLM tự động soạn ra."""
     title: str
     hook: str
     body: str
@@ -343,6 +361,7 @@ class ScriptVariant(BaseModel):
 # ── Job settings (mirrors api/models.py JobSettings) ──────────────────────────
 
 class AgentJobSettings(BaseModel):
+    """Cài đặt cho Job từ phía người dùng (giọng đọc, tỉ lệ, nhạc...). Dữ liệu này sẽ map qua VideoSettings."""
     tts_engine: str = "openai"
     voice: str = "nova"
     speech_rate: float = 1.0
@@ -379,6 +398,7 @@ DEFAULT_RETRY_BUDGET: dict[str, int] = {
 
 
 class AgentState(BaseModel):
+    """State trung tâm - Trái tim của toàn bộ pipeline, mang theo dữ liệu xuyên suốt các công đoạn."""
     # Identity
     job_id: str
     user_id: int
